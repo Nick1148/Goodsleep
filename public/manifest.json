@@ -1,0 +1,15 @@
+{
+  "name": "우리의 하루",
+  "short_name": "우리의 하루",
+  "description": "테사호드관 & 지인의 데일리 트래커",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF1E6",
+  "theme_color": "#FF7043",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
