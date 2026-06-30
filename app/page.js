@@ -44,15 +44,11 @@ function FireBuddy({ sleepy }) {
 }
 function FairyBuddy({ sleepy }) {
   return (
-    <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
-      <path d="M40 12l2.6 6 6-2.6-2.6 6 6 2.6-6 2.6 2.6 6-6-2.6-2.6 6-2.6-6-6 2.6 2.6-6-6-2.6 6-2.6-2.6-6 6 2.6z" fill="#FFD54F" opacity=".9" />
-      <circle cx="40" cy="48" r="22" fill="#FF8FB3" />
-      <path d="M22 36c-4-4-3-9 0-10M58 36c4-4 3-9 0-10" stroke="#C58BE0" strokeWidth="3" fill="none" strokeLinecap="round" />
-      {sleepy ? (<path d="M29 47q4 4 8 0M43 47q4 4 8 0" stroke="#5b2e4a" strokeWidth="2.4" fill="none" strokeLinecap="round" />)
-        : (<><circle cx="33" cy="47" r="4" fill="#5b2e4a" /><circle cx="47" cy="47" r="4" fill="#5b2e4a" /><circle cx="34" cy="45.8" r="1.3" fill="#fff" /><circle cx="48" cy="45.8" r="1.3" fill="#fff" /></>)}
-      <ellipse cx="28" cy="53" rx="3.4" ry="2.2" fill="#FF5C8A" opacity=".55" /><ellipse cx="52" cy="53" rx="3.4" ry="2.2" fill="#FF5C8A" opacity=".55" />
-      <path d={sleepy ? "M38 54h4" : "M37 53q3 3 6 0"} stroke="#5b2e4a" strokeWidth="2" fill="none" strokeLinecap="round" />
-    </svg>
+    <img
+      src="/seal.jpg"
+      alt="지인"
+      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
+    />
   );
 }
 
