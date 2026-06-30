@@ -1,0 +1,4 @@
+node_modules
+.next
+.DS_Store
+# .env.local 은 공개 키만 들어있어 커밋해도 되지만, 원하면 무시하세요
