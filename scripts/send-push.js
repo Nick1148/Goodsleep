@@ -1,4 +1,5 @@
-// 매 30분 실행: 각 구독자의 로컬 시간 기준으로 취침 리마인더 / 주간 리뷰 발송
+// 10분마다 실행: 각 구독자의 로컬 시간 기준으로 취침 리마인더 / 주간 리뷰 발송
+// GitHub cron이 지연/스킵돼도 잡히도록 발송 창을 넓게(취침 75분 전 ~ 30분 후) 잡음
 const webpush = require("web-push");
 
 const { SUPABASE_URL, ANON, BACKUP_SECRET, VAPID_PUBLIC, VAPID_PRIVATE } = process.env;
@@ -29,7 +30,6 @@ async function send(row, msg) {
   } catch (err) {
     console.log(`send fail ${row.couple_code}/${row.slot}: ${err.statusCode || err.message}`);
     if (err.statusCode === 404 || err.statusCode === 410) {
-      // 만료된 구독 정리
       await rpc("gs_delete_sub", { p_code: row.couple_code, p_slot: row.slot }).catch(() => {});
     }
     return false;
@@ -49,14 +49,17 @@ async function send(row, msg) {
     const [bh, bm] = (row.bedtime || "23:30").split(":").map(Number);
     const bed = bh * 60 + bm;
 
-    // 취침 리마인더: 목표 취침 60분 전 ~ 5분 후, 하루 1회
-    const inBed = (lHM >= bed - 60 && lHM <= bed + 5) || (bed < 60 && lHM >= bed - 60 + 1440);
+    // 취침 리마인더: 취침 75분 전 ~ 30분 후 (자정 넘김 안전 계산), 하루 1회
+    const start = (bed - 75 + 1440) % 1440;
+    const diff = (lHM - start + 1440) % 1440;
+    const inBed = diff <= 105;
+    console.log(`${row.slot}: localTime=${pad(Math.floor(lHM/60))}:${pad(lHM%60)} bed=${row.bedtime} inWindow=${inBed} last_bed=${row.last_bed}`);
     if (inBed && row.last_bed !== localDate) {
       if (await send(row, BED_MSG)) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "bed", p_date: localDate }); sent++; }
     }
 
-    // 주간 리뷰: 일요일 20:00~21:00 로컬, 주 1회
-    if (lDow === 0 && lHM >= 20 * 60 && lHM <= 21 * 60 && row.last_review !== localDate) {
+    // 주간 리뷰: 일요일 19:30~21:30 로컬, 주 1회
+    if (lDow === 0 && lHM >= 19 * 60 + 30 && lHM <= 21 * 60 + 30 && row.last_review !== localDate) {
       if (await send(row, REVIEW_MSG)) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "review", p_date: localDate }); sent++; }
     }
   }
