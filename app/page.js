@@ -42,7 +42,7 @@ const mergeDays = (prev, server, me) => {
 };
 const SNACKS = ["안 먹음", "조금", "보통", "많이"];
 const GOALS_DATE = "__goals__";
-const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [] });
+const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [], name: "" });
 const VAPID_PUBLIC = "BOi2fKS_xvYbfB75PT7GWfxlY5H_bmxWA-1ySlFSRtCSKutpAB0Ux_MmuUUcp1WCqcxdQofsNv10K1mgvt34RwI";
 const urlB64ToUint8 = (b64) => { const pad = "=".repeat((4 - (b64.length % 4)) % 4); const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/"); const raw = atob(s); return Uint8Array.from([...raw].map((c) => c.charCodeAt(0))); };
 
@@ -104,6 +104,7 @@ export default function Page() {
   const [celebrate, setCelebrate] = useState(null); // {key,msg}
   const [pushState, setPushState] = useState("loading"); // loading|unsupported|off|on|denied|busy
   const [pushMsg, setPushMsg] = useState("");
+  const [savedFlash, setSavedFlash] = useState(null);
   const saveTimers = useRef({});
 
   useEffect(() => {
@@ -165,6 +166,7 @@ export default function Page() {
     saveTimers.current[k] = setTimeout(() => { supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => {}); }, 600);
   };
   const updateEntry = (slot, patch) => setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; });
+  const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
   const saveGoal = (slot, patch) => setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && slot === me && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; });
@@ -249,6 +251,23 @@ export default function Page() {
     weekArr.forEach((dk) => { if (dk > today()) return; const d = days[dk] || {}; cheersTotal += (d.a?.cheers || 0) + (d.b?.cheers || 0); if (hasEntry(d.a) && hasEntry(d.b)) bothDays++; });
     return { cheersTotal, bothDays };
   };
+  // 월간 리포트: 특정 연/월의 지표 (durs, exDays, spread 등)
+  const monthMetrics = (slot, year, month) => {
+    const dim = new Date(year, month, 0).getDate();
+    let durs = [], beds = [], exDays = 0, logged = 0;
+    for (let d = 1; d <= dim; d++) {
+      const dk = `${year}-${pad(month)}-${pad(d)}`;
+      if (dk > today()) break;
+      const e2 = days[dk]?.[slot]; if (!e2) continue;
+      if (hasEntry(e2)) logged++;
+      const mm = sleepMinutes(e2.bed, e2.wake);
+      if (mm) { durs.push(mm); beds.push(bedMin(e2.bed)); }
+      if (e2.exercise) exDays++;
+    }
+    const avg = durs.length ? Math.round(durs.reduce((a,b)=>a+b,0)/durs.length) : null;
+    const spread = beds.length >= 2 ? Math.max(...beds) - Math.min(...beds) : null;
+    return { avg, exDays, logged, spread, nSleep: durs.length };
+  };
 
   const wrapStyle = ready ? themeVars(THEME[page || "a"], night) : themeVars(THEME.a, false);
 
@@ -275,6 +294,7 @@ export default function Page() {
   }
 
   const t = THEME[page]; const g = goals[page]; const e = getEntry(page);
+  const names = { a: (goals.a && goals.a.name) || THEME.a.name, b: (goals.b && goals.b.name) || THEME.b.name };
   const mins = sleepMinutes(e.bed, e.wake); const mood = sleepMood(mins);
   const charge = mins ? Math.min(100, Math.round((mins / 480) * 100)) : 0;
   const { md, dow } = labelDate(date); const isToday = date === today();
@@ -286,6 +306,11 @@ export default function Page() {
   const sdColor = sd.debt === 0 ? "#3DAE7B" : sd.debt <= 120 ? "#6FB98F" : sd.debt <= 300 ? "#E0A23B" : "#DC6B57";
   const moodTip = moodInsightFor(page, g);
   const cw = coupleWeek(thisWeek);
+  const nowD = new Date();
+  const thisMonth = monthMetrics(page, nowD.getFullYear(), nowD.getMonth() + 1);
+  const lastMonthD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+  const lastMonth = monthMetrics(page, lastMonthD.getFullYear(), lastMonthD.getMonth() + 1);
+  const monthRegLabel = regLabel(thisMonth.spread);
   const streak = streakFor(page);
   const lvl = streak >= 14 ? 3 : streak >= 7 ? 2 : streak >= 3 ? 1 : 0;
 
@@ -322,7 +347,7 @@ export default function Page() {
       <div className="td-app">
 
         <div className="td-topbar">
-          <span className="td-hello">{greeting()}, {t.name} {night ? "🌙" : "☀️"}</span>
+          <span className="td-hello">{greeting()}, {names[page]} {night ? "🌙" : "☀️"}</span>
           <div className="td-topbtns">
             <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
             <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
@@ -331,7 +356,7 @@ export default function Page() {
         {pushMsg && <div className="td-pushmsg" onClick={() => setPushMsg("")}>{pushMsg}</div>}
 
         <div className="td-tabs td-glasscard">
-          {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}><span>{THEME[p].emoji}</span>{THEME[p].name}{p === me ? " (나)" : ""}</button>))}
+          {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}><span>{THEME[p].emoji}</span>{names[p]}{p === me ? " (나)" : ""}</button>))}
         </div>
 
         {view === "today" && (<>
@@ -349,7 +374,7 @@ export default function Page() {
                 {lvl > 1 && <span className="td-spark s2">✨</span>}
                 {lvl > 2 && <span className="td-spark s3">⭐</span>}
               </div>
-              <div className="td-name">{t.name}<span className="td-badge">{t.emoji}{t.type}</span></div>
+              <div className="td-name">{names[page]}<span className="td-badge">{t.emoji}{t.type}</span></div>
               <div className="td-streak">🔥 {streak}일 연속{lvl > 0 ? ` · Lv.${lvl}` : ""}</div>
             </div>
 
@@ -426,11 +451,16 @@ export default function Page() {
                 {burstKey > 0 && <span className="td-burst" key={burstKey}>{[...Array(8)].map((_, i) => <b key={i} style={{ "--tx": (i * 10 - 35) + "px", "--dl": (i % 4) * 0.05 + "s" }}>♥</b>)}</span>}
               </button>
             </div>
+            <div className="td-savebar">
+              <button className="td-savebtn" onClick={() => flushSave(page)}>💾 지금 저장하기</button>
+              {savedFlash && savedFlash.slot === page && <span className="td-savedok">저장됨 ✓</span>}
+            </div>
           </div>
 
-          <button className="td-goalbtn td-card" onClick={() => setShowGoals((v) => !v)}>🎯 {t.name} 목표 설정 {showGoals ? "▲" : "▼"}</button>
+          <button className="td-goalbtn td-card" onClick={() => setShowGoals((v) => !v)}>🎯 {names[page]} 목표 설정 {showGoals ? "▲" : "▼"}</button>
           {showGoals && (
             <div className="td-goalpanel td-card">
+              <div className="td-goalrow"><label>이름</label><input type="text" value={g.name || ""} placeholder={THEME[page].name} onChange={(ev) => saveGoal(page, { name: ev.target.value })} style={{ width: 140 }} /></div>
               <div className="td-goalrow"><label>목표 취침</label><input type="time" value={g.bedtime} onChange={(ev) => saveGoal(page, { bedtime: ev.target.value })} /></div>
               <div className="td-goalrow"><label>목표 기상</label><input type="time" value={g.wake} onChange={(ev) => saveGoal(page, { wake: ev.target.value })} /></div>
               <div className="td-goalrow"><label>목표 수면(시간)</label><input type="number" step="0.5" min="4" max="12" value={g.sleepHours} onChange={(ev) => saveGoal(page, { sleepHours: parseFloat(ev.target.value) || 7.5 })} /></div>
@@ -442,7 +472,7 @@ export default function Page() {
 
         {view === "review" && (<>
           <div className="td-review td-card">
-            <h3>📊 {t.name} 이번 주 리뷰</h3>
+            <h3>📊 {names[page]} 이번 주 리뷰</h3>
             {fb.empty ? (<p className="td-reviewempty">이번 주 기록을 채우면 리뷰가 나와요 🙂</p>) : (<>
               {fb.good.length > 0 && <div className="td-fbgood">👏 잘한 점: {fb.good.join(" · ")}</div>}
               <div className="td-reviewgrid">
@@ -465,6 +495,18 @@ export default function Page() {
             </div>
             <p className="td-couplemsg">{cw.bothDays >= 5 ? "이번 주도 둘 다 꾸준했어요, 최고! 🎉" : cw.bothDays >= 2 ? "함께 쌓아가는 중이에요 🌱" : "이번 주도 같이 시작해볼까요? 😊"}</p>
           </div>
+          <div className="td-monthreport td-card">
+            <h3>📅 {names[page]} 이번 달 리포트</h3>
+            {thisMonth.nSleep === 0 ? (<p className="td-reviewempty">이번 달 기록을 채우면 리포트가 나와요 🙂</p>) : (<>
+              <div className="td-reviewgrid">
+                <div className="td-rv"><span>이번 달 평균 수면</span><b>{thisMonth.avg ? fmtSleep(thisMonth.avg) : "—"}</b></div>
+                <div className="td-rv"><span>이번 달 규칙성</span><b style={{ color: monthRegLabel.c }}>{monthRegLabel.txt}</b></div>
+                <div className="td-rv"><span>이번 달 운동</span><b>{thisMonth.exDays}회</b></div>
+                <div className="td-rv"><span>지난 달 대비</span><b>{lastMonth.avg && thisMonth.avg ? (thisMonth.avg > lastMonth.avg + 15 ? "더 잤어요 ↑" : thisMonth.avg < lastMonth.avg - 15 ? "덜 잤어요 ↓" : "비슷해요 →") : "—"}</b></div>
+              </div>
+              <div className="td-fbtip">📆 이번 주 평균({cur.avg ? fmtSleep(cur.avg) : "—"})이 이번 달 평균({thisMonth.avg ? fmtSleep(thisMonth.avg) : "—"})보다 {(cur.avg && thisMonth.avg) ? (cur.avg > thisMonth.avg ? "좋은 흐름이에요 👍" : cur.avg < thisMonth.avg ? "살짝 아쉬워요, 이번 주 조금 더 챙겨봐요 🌱" : "비슷해요") : "데이터가 더 필요해요"}</div>
+            </>)}
+          </div>
           <div className="td-week td-card">
             <h3>🛌 이번 주 수면 리듬</h3>
             <div className="td-bars">
@@ -476,7 +518,7 @@ export default function Page() {
                 </button>);
               })}
             </div>
-            <div className="td-legend"><span><i style={{ background: THEME.a.c1 }} />{THEME.a.name}</span><span><i style={{ background: THEME.b.c1 }} />{THEME.b.name}</span></div>
+            <div className="td-legend"><span><i style={{ background: THEME.a.c1 }} />{names.a}</span><span><i style={{ background: THEME.b.c1 }} />{names.b}</span></div>
           </div>
         </>)}
 
@@ -484,7 +526,7 @@ export default function Page() {
           <div className="td-month td-card">
             <div className="td-monthhead">
               <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m - 2, 1))); }}>‹</button>
-              <h3>🗓️ {my_}년 {mm_}월 · {t.name}</h3>
+              <h3>🗓️ {my_}년 {mm_}월 · {names[page]}</h3>
               <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m, 1))); }}>›</button>
             </div>
             <div className="td-monthdow">{DOW_MON.map((d) => <span key={d}>{d}</span>)}</div>
@@ -661,6 +703,12 @@ const css = `
 .td-couple h3{ font-family:'Jua'; font-size:15px; margin:0 0 10px; color:var(--ink); }
 .td-couplerow{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:10px; }
 .td-couplemsg{ font-family:'Jua'; font-size:13px; color:var(--c2); text-align:center; margin:0; }
+.td-savebar{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+.td-savebtn{ flex:1; padding:12px; border:none; border-radius:13px; background:var(--soft2); color:var(--c2); font-family:'Jua'; font-size:14px; cursor:pointer; }
+.td-savebtn:active{ transform:scale(.98); }
+.td-savedok{ font-family:'Jua'; font-size:13px; color:#3DAE7B; animation:pop .3s ease; }
+.td-monthreport{ padding:16px; margin-top:12px; }
+.td-monthreport h3{ font-family:'Jua'; font-size:15px; margin:0 0 12px; color:var(--ink); }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
