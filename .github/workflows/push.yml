@@ -1,0 +1,27 @@
+name: Push Reminders
+
+on:
+  schedule:
+    - cron: '0,30 * * * *'   # 매 30분 (각자 로컬 취침시간에 맞춰 스크립트가 판단)
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install web-push@3.6.7 --no-save
+      - name: Send reminders
+        env:
+          SUPABASE_URL: https://cfztxjblbwrxtsvlpnyp.supabase.co
+          ANON: sb_publishable_tGZr2Zsa-iLW-Hr2sNUNkg_QYbGPt8G
+          BACKUP_SECRET: ${{ secrets.BACKUP_SECRET }}
+          VAPID_PUBLIC: BOi2fKS_xvYbfB75PT7GWfxlY5H_bmxWA-1ySlFSRtCSKutpAB0Ux_MmuUUcp1WCqcxdQofsNv10K1mgvt34RwI
+          VAPID_PRIVATE: ${{ secrets.VAPID_PRIVATE }}
+        run: node scripts/send-push.js
