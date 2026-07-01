@@ -43,6 +43,8 @@ const mergeDays = (prev, server, me) => {
 const SNACKS = ["안 먹음", "조금", "보통", "많이"];
 const GOALS_DATE = "__goals__";
 const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [] });
+const VAPID_PUBLIC = "BOi2fKS_xvYbfB75PT7GWfxlY5H_bmxWA-1ySlFSRtCSKutpAB0Ux_MmuUUcp1WCqcxdQofsNv10K1mgvt34RwI";
+const urlB64ToUint8 = (b64) => { const pad = "=".repeat((4 - (b64.length % 4)) % 4); const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/"); const raw = atob(s); return Uint8Array.from([...raw].map((c) => c.charCodeAt(0))); };
 
 const THEME = {
   a: { name: "테사호드관", type: "불꽃", emoji: "🔥", c1: "#FF7043", c2: "#EC4040", soft: "#FFE0CC", soft2: "#FFF0E6", grat: "#FFF7E8", gratLine: "#F2D9A0", gratTxt: "#C98A1E", sky: "linear-gradient(180deg,#FFB37A,#FF8A5B)", glowD: "#3a1f18" },
@@ -100,6 +102,8 @@ export default function Page() {
   const [monthRef, setMonthRef] = useState(today());
   const [burstKey, setBurstKey] = useState(0);
   const [celebrate, setCelebrate] = useState(null); // {key,msg}
+  const [pushState, setPushState] = useState("loading"); // loading|unsupported|off|on|denied|busy
+  const [pushMsg, setPushMsg] = useState("");
   const saveTimers = useRef({});
 
   useEffect(() => {
@@ -110,6 +114,19 @@ export default function Page() {
       else { const h = new Date().getHours(); if (h >= 20 || h < 6) setNight(true); }
     } catch (e) {}
     setReady(true);
+  }, []);
+
+  // register service worker + detect push capability/state
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) { setPushState("unsupported"); return; }
+    navigator.serviceWorker.register("/sw.js").then(async (reg) => {
+      try {
+        const sub = await reg.pushManager.getSubscription();
+        if (Notification.permission === "denied") setPushState("denied");
+        else setPushState(sub ? "on" : "off");
+      } catch (e) { setPushState("off"); }
+    }).catch(() => setPushState("unsupported"));
   }, []);
 
   const toggleNight = () => setNight((v) => { const nv = !v; try { localStorage.setItem(LS_NIGHT, nv ? "1" : "0"); } catch (e) {} return nv; });
@@ -150,8 +167,32 @@ export default function Page() {
   const updateEntry = (slot, patch) => setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; });
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
-  const saveGoal = (slot, patch) => setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); return next; });
+  const saveGoal = (slot, patch) => setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && slot === me && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; });
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
+
+  const togglePush = async () => {
+    setPushMsg("");
+    if (pushState === "unsupported") { setPushMsg("아이폰은 먼저 '홈 화면에 추가'로 앱을 설치한 뒤에 알림을 켤 수 있어요 🙏"); return; }
+    if (pushState === "denied") { setPushMsg("브라우저/기기 설정에서 이 사이트의 알림 권한을 허용으로 바꿔주세요."); return; }
+    if (pushState === "on") {
+      setPushState("busy");
+      try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); await supabase.rpc("gs_delete_sub", { p_code: code, p_slot: me }); } catch (e) {}
+      setPushState("off"); setPushMsg("알림을 껐어요.");
+      return;
+    }
+    // turn on
+    setPushState("busy");
+    try {
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { setPushState(perm === "denied" ? "denied" : "off"); setPushMsg("알림 권한이 필요해요."); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
+      const j = sub.toJSON();
+      const tz = -new Date().getTimezoneOffset();
+      await supabase.rpc("gs_save_sub", { p_code: code, p_slot: me, p_endpoint: sub.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_bedtime: (goals[me] && goals[me].bedtime) || "23:30", p_tz: tz });
+      setPushState("on"); setPushMsg("알림을 켰어요! 🔔");
+    } catch (e) { setPushState("off"); setPushMsg("알림 설정에 실패했어요. 잠시 후 다시 시도해줘요."); }
+  };
 
   const hasEntry = (e) => !!e && (e.bed || e.wake || e.exercise || e.exNote || e.snack >= 0 || e.snackNote || (e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner)) || e.gratitude?.some((g) => g.trim()) || e.reflection?.trim());
   const streakFor = (slot) => { let n = 0, cur = today(); for (let i = 0; i < 400; i++) { const d = days[cur]; if (d && hasEntry(d[slot])) { n++; cur = addDays(cur, -1); } else break; } return n; };
@@ -244,8 +285,12 @@ export default function Page() {
 
         <div className="td-topbar">
           <span className="td-hello">{greeting()}, {t.name} {night ? "🌙" : "☀️"}</span>
-          <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
+          <div className="td-topbtns">
+            <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
+            <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
+          </div>
         </div>
+        {pushMsg && <div className="td-pushmsg" onClick={() => setPushMsg("")}>{pushMsg}</div>}
 
         <div className="td-tabs td-glasscard">
           {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}><span>{THEME[p].emoji}</span>{THEME[p].name}{p === me ? " (나)" : ""}</button>))}
@@ -425,6 +470,8 @@ const css = `
 .td-glasscard{ background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border:1px solid var(--line); }
 
 .td-topbar{ display:flex; align-items:center; justify-content:space-between; padding:2px 4px 10px; }
+.td-topbtns{ display:flex; gap:8px; }
+.td-pushmsg{ background:var(--card); border:1px solid var(--line); color:var(--ink); font-size:13px; text-align:center; padding:9px 12px; border-radius:12px; margin-bottom:10px; cursor:pointer; box-shadow:0 3px 10px var(--shadow); }
 .td-hello{ font-family:'Jua'; font-size:15px; color:var(--ink); }
 .td-nightbtn{ width:38px; height:38px; border:none; border-radius:50%; background:var(--card); box-shadow:0 3px 10px var(--shadow); font-size:17px; cursor:pointer; }
 
