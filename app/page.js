@@ -2,15 +2,17 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "../lib/supabaseClient";
 
-// ── date / sleep utils ───────────────────────────────────────────
+// ── utils ───────────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => ymd(new Date());
 const addDays = (k, n) => { const [y, m, d] = k.split("-").map(Number); return ymd(new Date(y, m - 1, d + n)); };
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
+const DOW_MON = ["월", "화", "수", "목", "금", "토", "일"];
 const labelDate = (k) => { const [y, m, d] = k.split("-").map(Number); const dt = new Date(y, m - 1, d); return { md: `${m}월 ${d}일`, dow: DOW[dt.getDay()], short: `${m}/${d}` }; };
 const sleepMinutes = (bed, wake) => { if (!bed || !wake) return null; const [bh, bm] = bed.split(":").map(Number); const [wh, wm] = wake.split(":").map(Number); let m = wh * 60 + wm - (bh * 60 + bm); if (m <= 0) m += 1440; return m; };
 const fmtSleep = (m) => m == null ? "—" : (m % 60 ? `${Math.floor(m / 60)}시간 ${m % 60}분` : `${Math.floor(m / 60)}시간`);
+const bedMin = (bed) => { if (!bed) return null; const [h, m] = bed.split(":").map(Number); let v = h * 60 + m; if (v < 12 * 60) v += 24 * 60; return v; };
 const sleepMood = (m) => {
   if (m == null) return { emoji: "🌙", msg: "오늘 몇 시간 잤어?", sleepy: true };
   const h = m / 60;
@@ -19,15 +21,35 @@ const sleepMood = (m) => {
   if (h <= 9) return { emoji: "😊", msg: "푹 잤네요!", sleepy: false };
   return { emoji: "💤", msg: "든든하게 충전 완료!", sleepy: false };
 };
-const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", gratitude: ["", "", ""], reflection: "" });
+const greeting = () => { const h = new Date().getHours(); if (h < 6) return "늦은 밤이야"; if (h < 12) return "좋은 아침이야"; if (h < 18) return "좋은 오후야"; if (h < 22) return "좋은 저녁이야"; return "좋은 밤이야"; };
+const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, gratitude: ["", "", ""], reflection: "" });
 const blankEntry = () => ({ ...FIELDS(), cheers: 0 });
 const dataForDb = (e) => { const { cheers, ...rest } = e; return rest; };
-const entryFromRow = (row) => ({ ...FIELDS(), ...(row.data || {}), cheers: row.cheers ?? 0 });
+const entryFromRow = (row) => { const d = row.data || {}; return { ...FIELDS(), ...d, meals: { breakfast: "", lunch: "", dinner: "", ...(d.meals || {}) }, cheers: row.cheers ?? 0 }; };
 const SNACKS = ["안 먹음", "조금", "보통", "많이"];
+const GOALS_DATE = "__goals__";
+const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [] });
 
 const THEME = {
-  a: { name: "테사호드관", type: "불꽃", emoji: "🔥", c1: "#FF7043", c2: "#EC4040", soft: "#FFE0CC", soft2: "#FFF0E6", grat: "#FFF7E8", gratLine: "#F2D9A0", gratTxt: "#C98A1E", sky: "linear-gradient(180deg,#FFB37A,#FF8A5B)" },
-  b: { name: "지인", type: "페어리", emoji: "✨", c1: "#FF8FB3", c2: "#B07BE0", soft: "#FBD7E8", soft2: "#FFF1F7", grat: "#FFF5FC", gratLine: "#EFC9E2", gratTxt: "#C45C9E", sky: "linear-gradient(180deg,#FFB6D2,#C79BE8)" },
+  a: { name: "테사호드관", type: "불꽃", emoji: "🔥", c1: "#FF7043", c2: "#EC4040", soft: "#FFE0CC", soft2: "#FFF0E6", grat: "#FFF7E8", gratLine: "#F2D9A0", gratTxt: "#C98A1E", sky: "linear-gradient(180deg,#FFB37A,#FF8A5B)", glowD: "#3a1f18" },
+  b: { name: "지인", type: "페어리", emoji: "✨", c1: "#FF8FB3", c2: "#B07BE0", soft: "#FBD7E8", soft2: "#FFF1F7", grat: "#FFF5FC", gratLine: "#EFC9E2", gratTxt: "#C45C9E", sky: "linear-gradient(180deg,#FFB6D2,#C79BE8)", glowD: "#2e1f3a" },
+};
+
+// theme variables for light / night
+const themeVars = (t, night) => {
+  const base = { "--c1": t.c1, "--c2": t.c2, "--sky": t.sky, "--grattxt": t.gratTxt };
+  if (!night) return {
+    ...base, "--pageBg": t.soft2, "--glowc": t.soft, "--card": "#ffffff", "--field": "#ffffff",
+    "--soft": t.soft, "--soft2": t.soft2, "--grat": t.grat, "--gratline": t.gratLine,
+    "--ink": "#3E3531", "--muted": "#AEA399", "--line": "#EFE6DB", "--good": "#F0F8F1",
+    "--glass": "rgba(255,255,255,.62)", "--shadow": "rgba(120,90,60,.14)",
+  };
+  return {
+    ...base, "--pageBg": "#171526", "--glowc": t.glowD, "--card": "#232135", "--field": "#2c2a40",
+    "--soft": "#3a3752", "--soft2": "#1f1d30", "--grat": "#2a2740", "--gratline": "#403a5e", "--grattxt": "#E7C46B",
+    "--ink": "#ECE6DE", "--muted": "#9a94a8", "--line": "rgba(255,255,255,.08)", "--good": "rgba(110,190,140,.14)",
+    "--glass": "rgba(30,28,46,.55)", "--shadow": "rgba(0,0,0,.4)",
+  };
 };
 
 function FireBuddy({ sleepy }) {
@@ -42,148 +64,122 @@ function FireBuddy({ sleepy }) {
     </svg>
   );
 }
-function FairyBuddy({ sleepy }) {
-  return (
-    <img
-      src="/seal.jpg"
-      alt="지인"
-      style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }}
-    />
-  );
-}
+function FairyBuddy() { return <img src="/seal.jpg" alt="지인" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />; }
 
-const LS_CODE = "couple-code";
-const LS_ME = "couple-me";
+const LS_CODE = "couple-code", LS_ME = "couple-me", LS_NIGHT = "couple-night";
 
 export default function Page() {
   const [code, setCode] = useState(null);
   const [me, setMe] = useState("a");
   const [ready, setReady] = useState(false);
-
-  // login form state
+  const [night, setNight] = useState(false);
+  const [view, setView] = useState("today"); // today | review | calendar
   const [codeInput, setCodeInput] = useState("");
   const [meInput, setMeInput] = useState("a");
 
   const [days, setDays] = useState({});
+  const [goals, setGoals] = useState({ a: defaultGoal(), b: defaultGoal() });
   const [date, setDate] = useState(today());
   const [page, setPage] = useState("a");
   const [loading, setLoading] = useState(true);
+  const [showGoals, setShowGoals] = useState(false);
+  const [monthRef, setMonthRef] = useState(today());
+  const [burstKey, setBurstKey] = useState(0);
+  const [celebrate, setCelebrate] = useState(null); // {key,msg}
   const saveTimers = useRef({});
 
-  // restore session
   useEffect(() => {
     try {
-      const c = localStorage.getItem(LS_CODE);
-      const m = localStorage.getItem(LS_ME);
+      const c = localStorage.getItem(LS_CODE); const m = localStorage.getItem(LS_ME); const n = localStorage.getItem(LS_NIGHT);
       if (c) { setCode(c); setPage(m === "b" ? "b" : "a"); setMe(m === "b" ? "b" : "a"); }
+      if (n === "1") setNight(true); else if (n === "0") setNight(false);
+      else { const h = new Date().getHours(); if (h >= 20 || h < 6) setNight(true); }
     } catch (e) {}
     setReady(true);
   }, []);
 
-  // load + realtime when code set
+  const toggleNight = () => setNight((v) => { const nv = !v; try { localStorage.setItem(LS_NIGHT, nv ? "1" : "0"); } catch (e) {} return nv; });
+
   useEffect(() => {
     if (!code) return;
     let channel;
     (async () => {
       setLoading(true);
       const { data: rows, error } = await supabase.from("entries").select("*").eq("couple_code", code);
-      const next = {};
-      if (!error && rows) rows.forEach((r) => { next[r.date] = next[r.date] || {}; next[r.date][r.slot] = entryFromRow(r); });
-      setDays(next);
-      setLoading(false);
-
-      channel = supabase
-        .channel("entries-" + code)
+      const nd = {}; const ng = { a: defaultGoal(), b: defaultGoal() };
+      if (!error && rows) rows.forEach((r) => {
+        if (r.date === GOALS_DATE) ng[r.slot] = { ...defaultGoal(), ...(r.data || {}) };
+        else { nd[r.date] = nd[r.date] || {}; nd[r.date][r.slot] = entryFromRow(r); }
+      });
+      setDays(nd); setGoals(ng); setLoading(false);
+      channel = supabase.channel("entries-" + code)
         .on("postgres_changes", { event: "*", schema: "public", table: "entries", filter: `couple_code=eq.${code}` }, (payload) => {
-          const row = payload.new;
-          if (!row || !row.date || !row.slot) return;
+          const row = payload.new; if (!row || !row.slot) return;
+          if (row.date === GOALS_DATE) { setGoals((prev) => ({ ...prev, [row.slot]: { ...defaultGoal(), ...(row.data || {}) } })); return; }
           setDays((prev) => {
             const day = { ...(prev[row.date] || {}) };
-            if (row.slot === me) {
-              // my own row: keep my local edits, only sync cheers from partner
-              const mine = day[me] || blankEntry();
-              day[me] = { ...mine, cheers: row.cheers ?? mine.cheers };
-            } else {
-              day[row.slot] = entryFromRow(row);
-            }
+            if (row.slot === me) { const mine = day[me] || blankEntry(); day[me] = { ...mine, cheers: row.cheers ?? mine.cheers }; }
+            else day[row.slot] = entryFromRow(row);
             return { ...prev, [row.date]: day };
           });
-        })
-        .subscribe();
+        }).subscribe();
     })();
     return () => { if (channel) supabase.removeChannel(channel); };
   }, [code, me]);
 
-  const login = () => {
-    const c = codeInput.trim().toLowerCase();
-    if (!c) return;
-    try { localStorage.setItem(LS_CODE, c); localStorage.setItem(LS_ME, meInput); } catch (e) {}
-    setCode(c); setMe(meInput); setPage(meInput);
-  };
-  const logout = () => {
-    try { localStorage.removeItem(LS_CODE); localStorage.removeItem(LS_ME); } catch (e) {}
-    setCode(null); setDays({}); setCodeInput("");
-  };
+  const login = () => { const c = codeInput.trim().toLowerCase(); if (!c) return; try { localStorage.setItem(LS_CODE, c); localStorage.setItem(LS_ME, meInput); } catch (e) {} setCode(c); setMe(meInput); setPage(meInput); };
+  const logout = () => { try { localStorage.removeItem(LS_CODE); localStorage.removeItem(LS_ME); } catch (e) {} setCode(null); setDays({}); setCodeInput(""); };
 
   const getEntry = (slot) => (days[date] && days[date][slot]) || blankEntry();
-
   const pushData = (slot, entry) => {
     const k = `${date}:${slot}`;
     if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
-    saveTimers.current[k] = setTimeout(() => {
-      supabase.from("entries").upsert(
-        { couple_code: code, date, slot, data: dataForDb(entry), updated_at: new Date().toISOString() },
-        { onConflict: "couple_code,date,slot" }
-      ).then(() => {});
-    }, 600);
+    saveTimers.current[k] = setTimeout(() => { supabase.from("entries").upsert({ couple_code: code, date, slot, data: dataForDb(entry), updated_at: new Date().toISOString() }, { onConflict: "couple_code,date,slot" }).then(() => {}); }, 600);
   };
+  const updateEntry = (slot, patch) => setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; });
+  const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
+  const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.from("entries").upsert({ couple_code: code, date, slot, cheers: entry.cheers, updated_at: new Date().toISOString() }, { onConflict: "couple_code,date,slot" }).then(() => {}); return { ...prev, [date]: day }; }); };
+  const saveGoal = (slot, patch) => setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.from("entries").upsert({ couple_code: code, date: GOALS_DATE, slot, data: g, updated_at: new Date().toISOString() }, { onConflict: "couple_code,date,slot" }).then(() => {}); return next; });
+  const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
 
-  const updateEntry = (slot, patch) => {
-    setDays((prev) => {
-      const day = { ...(prev[date] || {}) };
-      const entry = { ...(day[slot] || blankEntry()), ...patch };
-      day[slot] = entry;
-      pushData(slot, entry);
-      return { ...prev, [date]: day };
-    });
-  };
-
-  const sendCheer = (slot) => {
-    setDays((prev) => {
-      const day = { ...(prev[date] || {}) };
-      const entry = { ...(day[slot] || blankEntry()) };
-      entry.cheers = (entry.cheers || 0) + 1;
-      day[slot] = entry;
-      supabase.from("entries").upsert(
-        { couple_code: code, date, slot, cheers: entry.cheers, updated_at: new Date().toISOString() },
-        { onConflict: "couple_code,date,slot" }
-      ).then(() => {});
-      return { ...prev, [date]: day };
-    });
-  };
-
-  const hasEntry = (e) => !!e && (e.bed || e.wake || e.exercise || e.exNote || e.snack >= 0 || e.snackNote || e.gratitude?.some((g) => g.trim()) || e.reflection?.trim());
+  const hasEntry = (e) => !!e && (e.bed || e.wake || e.exercise || e.exNote || e.snack >= 0 || e.snackNote || (e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner)) || e.gratitude?.some((g) => g.trim()) || e.reflection?.trim());
   const streakFor = (slot) => { let n = 0, cur = today(); for (let i = 0; i < 400; i++) { const d = days[cur]; if (d && hasEntry(d[slot])) { n++; cur = addDays(cur, -1); } else break; } return n; };
 
-  // ── login screen ──
-  if (!ready) return <div className="td-wrap" style={themeVars(THEME.a)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
+  const weekDates = (ref) => { const [y, m, d] = ref.split("-").map(Number); const dt = new Date(y, m - 1, d); const dow = (dt.getDay() + 6) % 7; const mon = new Date(y, m - 1, d - dow); return [...Array(7)].map((_, i) => ymd(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i))); };
+  const metricsFor = (slot, weekArr) => {
+    let durs = [], beds = [], exDays = 0, logged = 0;
+    weekArr.forEach((dk) => { if (dk > today()) return; const e = days[dk]?.[slot]; if (!e) return; if (hasEntry(e)) logged++; const mm = sleepMinutes(e.bed, e.wake); if (mm) { durs.push(mm); beds.push(bedMin(e.bed)); } if (e.exercise) exDays++; });
+    const avg = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null;
+    const spread = beds.length >= 2 ? Math.max(...beds) - Math.min(...beds) : null;
+    return { durs, beds, exDays, logged, avg, spread, nSleep: durs.length };
+  };
+  const regLabel = (spread) => { if (spread == null) return { txt: "기록 부족", dots: 0, c: "#B0A59C" }; if (spread <= 60) return { txt: "아주 규칙적", dots: 5, c: "#3DAE7B" }; if (spread <= 90) return { txt: "규칙적", dots: 4, c: "#6FB98F" }; if (spread <= 120) return { txt: "보통", dots: 3, c: "#E0A23B" }; if (spread <= 180) return { txt: "조금 들쭉날쭉", dots: 2, c: "#E08A3B" }; return { txt: "들쭉날쭉", dots: 1, c: "#DC6B57" }; };
+  const makeFeedback = (cur, prev, goal) => {
+    const good = [], tip = [];
+    if (cur.spread != null) { if (cur.spread <= 60) good.push("취침 시간이 아주 일정했어요 👍"); else tip.push("취침 시간을 1시간 이내로 모아보기"); }
+    if (cur.avg != null) { const gm = goal.sleepHours * 60; if (cur.avg >= gm - 30) good.push(`평균 ${fmtSleep(cur.avg)} 잘 잤어요`); else tip.push(`30분 더 자보기 (목표 ${goal.sleepHours}시간)`); }
+    if (cur.exDays >= goal.exerciseWeekly) good.push(`운동 목표 달성! (${cur.exDays}회)`); else if (cur.exDays > 0) tip.push(`운동 ${goal.exerciseWeekly - cur.exDays}회 더 채우기`); else tip.push("이번 주 운동 시작해보기");
+    let trend = "";
+    if (prev.avg != null && cur.avg != null) { if (cur.avg > prev.avg + 15) trend = "지난주보다 더 잤어요 ↑"; else if (cur.avg < prev.avg - 15) trend = "지난주보다 덜 잤어요 ↓"; else trend = "지난주와 비슷해요 →"; }
+    return { good, tip, trend, empty: cur.nSleep === 0 && cur.exDays === 0 && cur.logged === 0 };
+  };
+
+  const wrapStyle = ready ? themeVars(THEME[page || "a"], night) : themeVars(THEME.a, false);
+
+  if (!ready) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
+
   if (!code) {
     return (
-      <div className="td-wrap" style={themeVars(THEME.a)}>
+      <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
         <style>{css}</style>
         <div className="td-login">
-          <div className="td-loginbuddy"><FireBuddy sleepy={false} /></div>
+          <div className="td-loginbuddy td-breathe"><FireBuddy sleepy={false} /></div>
           <h1>우리의 하루</h1>
           <p>둘만의 공유 코드를 입력하면 같은 기록을 함께 봐요.</p>
-          <input className="td-input" placeholder="공유 코드 (예: jiin-tessa-2026)" value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && login()} />
+          <input className="td-input" placeholder="공유 코드 (예: tessa-jiin-93f2k)" value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && login()} />
           <div className="td-whopick">
             <span>나는</span>
-            {["a", "b"].map((p) => (
-              <button key={p} className={"td-whobtn" + (meInput === p ? " on" : "")} onClick={() => setMeInput(p)} style={{ "--tc": THEME[p].c1 }}>
-                {THEME[p].emoji} {THEME[p].name}
-              </button>
-            ))}
+            {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (meInput === p ? " on" : "")} onClick={() => setMeInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
           </div>
           <button className="td-loginbtn" onClick={login}>시작하기</button>
           <small className="td-loginhint">같은 코드를 두 사람이 입력하면 연결돼요.</small>
@@ -192,180 +188,374 @@ export default function Page() {
     );
   }
 
-  // ── main ──
-  const week = []; for (let i = 6; i >= 0; i--) week.push(addDays(today(), -i));
-  let wSum = 0, wCnt = 0; week.forEach((dk) => { const m = sleepMinutes(days[dk]?.[page]?.bed, days[dk]?.[page]?.wake); if (m) { wSum += m; wCnt++; } });
-  const wAvg = wCnt ? Math.round(wSum / wCnt) : null;
-  const { md, dow } = labelDate(date); const isToday = date === today();
-  const t = THEME[page]; const e = getEntry(page); const mins = sleepMinutes(e.bed, e.wake); const mood = sleepMood(mins);
+  const t = THEME[page]; const g = goals[page]; const e = getEntry(page);
+  const mins = sleepMinutes(e.bed, e.wake); const mood = sleepMood(mins);
   const charge = mins ? Math.min(100, Math.round((mins / 480) * 100)) : 0;
+  const { md, dow } = labelDate(date); const isToday = date === today();
+  const thisWeek = weekDates(today()); const lastWeek = weekDates(addDays(today(), -7));
+  const cur = metricsFor(page, thisWeek); const prev = metricsFor(page, lastWeek);
+  const reg = regLabel(cur.spread); const fb = makeFeedback(cur, prev, g);
+  const exPct = Math.min(100, Math.round((cur.exDays / Math.max(1, g.exerciseWeekly)) * 100));
+  const streak = streakFor(page);
+  const lvl = streak >= 14 ? 3 : streak >= 7 ? 2 : streak >= 3 ? 1 : 0;
+
+  let bedNudge = null;
+  if (page === me && isToday && !e.bed && g.bedtime) {
+    const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes();
+    const bm = g.bedtime.split(":").map(Number); const target = bm[0] * 60 + bm[1];
+    let diff = target - nowMin; if (diff < -720) diff += 1440;
+    if (diff >= 0 && diff <= 90) bedNudge = `곧 목표 취침 시간(${g.bedtime})이에요 🌙`;
+  }
+
+  const onExercise = () => {
+    const willBeOn = !e.exercise;
+    updateEntry(page, { exercise: willBeOn });
+    if (willBeOn && !e.exercise) {
+      const inWeek = thisWeek.includes(date);
+      const already = e.exercise;
+      const projected = cur.exDays + (inWeek && !already ? 1 : 0);
+      if (inWeek && projected === g.exerciseWeekly && cur.exDays < g.exerciseWeekly) fireCelebrate("이번 주 운동 목표 달성! 🎉");
+    }
+  };
+
+  const [my_, mm_] = monthRef.split("-").map(Number);
+  const first = new Date(my_, mm_ - 1, 1); const startPad = (first.getDay() + 6) % 7;
+  const daysInMonth = new Date(my_, mm_, 0).getDate();
+  const monthCells = [];
+  for (let i = 0; i < startPad; i++) monthCells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) monthCells.push(ymd(new Date(my_, mm_ - 1, d)));
 
   return (
-    <div className="td-wrap" style={themeVars(t)}>
+    <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
       <style>{css}</style>
+      <div className="td-glow" />
       <div className="td-app">
 
-        <div className="td-tabs">
-          {["a", "b"].map((p) => (
-            <button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}>
-              <span>{THEME[p].emoji}</span>{THEME[p].name}{p === me ? " (나)" : ""}
-            </button>
-          ))}
+        <div className="td-topbar">
+          <span className="td-hello">{greeting()}, {t.name} {night ? "🌙" : "☀️"}</span>
+          <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
         </div>
 
-        <div className="td-datenav">
-          <button onClick={() => setDate(addDays(date, -1))} aria-label="이전">‹</button>
-          <div className="td-date"><b>{md}</b><small>{dow}요일{isToday ? " · 오늘" : ""}</small></div>
-          <button onClick={() => setDate(addDays(date, 1))} disabled={isToday} aria-label="다음">›</button>
+        <div className="td-tabs td-glasscard">
+          {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}><span>{THEME[p].emoji}</span>{THEME[p].name}{p === me ? " (나)" : ""}</button>))}
         </div>
 
-        <div className="td-hero">
-          <div className="td-buddywrap">
-            <div className="td-buddy">{page === "a" ? <FireBuddy sleepy={mood.sleepy} /> : <FairyBuddy sleepy={mood.sleepy} />}</div>
-            <div className="td-name">{t.name}<span className="td-badge">{t.emoji}{t.type}</span></div>
-            <div className="td-streak">🔥 {streakFor(page)}일 연속</div>
+        {view === "today" && (<>
+          <div className="td-datenav">
+            <button onClick={() => setDate(addDays(date, -1))} aria-label="이전">‹</button>
+            <div className="td-date"><b>{md}</b><small>{dow}요일{isToday ? " · 오늘" : ""}</small></div>
+            <button onClick={() => setDate(addDays(date, 1))} disabled={isToday} aria-label="다음">›</button>
           </div>
-          <div className="td-sleepcard">
-            <div className="td-sleephead"><span>😴 오늘 수면</span><b>{fmtSleep(mins)}</b></div>
-            <div className="td-times">
-              <label><i>🌙 잘 때</i><input type="time" value={e.bed} onChange={(ev) => updateEntry(page, { bed: ev.target.value })} /></label>
-              <label><i>☀️ 일어난 때</i><input type="time" value={e.wake} onChange={(ev) => updateEntry(page, { wake: ev.target.value })} /></label>
+
+          <div className="td-hero td-card">
+            <div className="td-buddywrap">
+              <div className={"td-buddy td-breathe lvl" + lvl}>
+                {page === "a" ? <FireBuddy sleepy={mood.sleepy} /> : <FairyBuddy />}
+                {lvl > 0 && <span className="td-spark s1">✨</span>}
+                {lvl > 1 && <span className="td-spark s2">✨</span>}
+                {lvl > 2 && <span className="td-spark s3">⭐</span>}
+              </div>
+              <div className="td-name">{t.name}<span className="td-badge">{t.emoji}{t.type}</span></div>
+              <div className="td-streak">🔥 {streak}일 연속{lvl > 0 ? ` · Lv.${lvl}` : ""}</div>
             </div>
-            <div className="td-charge"><div className="td-chargefill" style={{ width: charge + "%" }} /></div>
-            <div className="td-moodmsg">{mood.emoji} {mood.msg}{wAvg ? <span className="td-avg"> · 이번 주 평균 {fmtSleep(wAvg)}</span> : null}</div>
-          </div>
-        </div>
 
-        <div className="td-card">
-          <div className="td-block">
-            <div className="td-blabel">💪 운동</div>
-            <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={() => updateEntry(page, { exercise: !e.exercise })}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
-            {e.exercise && <input className="td-input" placeholder="뭐 했어? (예: 런닝 30분)" value={e.exNote} onChange={(ev) => updateEntry(page, { exNote: ev.target.value })} />}
-          </div>
-          <div className="td-block">
-            <div className="td-blabel">🍪 간식</div>
-            <div className="td-chips">{SNACKS.map((s, i) => (<button key={i} className={"td-chip" + (e.snack === i ? " on" : "")} onClick={() => updateEntry(page, { snack: e.snack === i ? -1 : i })}>{s}</button>))}</div>
-            {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자, 아이스크림)" value={e.snackNote} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
-          </div>
-          <div className="td-block td-gratblock">
-            <div className="td-blabel td-gratlabel">⭐ 오늘의 3감사</div>
-            {[0, 1, 2].map((i) => (<input key={i} className="td-input td-gratinput" placeholder={`${i + 1}. 감사한 일`} value={e.gratitude[i]} onChange={(ev) => { const g = [...e.gratitude]; g[i] = ev.target.value; updateEntry(page, { gratitude: g }); }} />))}
-          </div>
-          <div className="td-block">
-            <div className="td-blabel">📓 한 줄 후기</div>
-            <textarea className="td-area" rows={2} placeholder="오늘 하루는 어땠어?" value={e.reflection} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />
-          </div>
-          <div className="td-cheerrow">
-            {e.cheers > 0 && <span className="td-cheercount">받은 응원 {e.cheers}</span>}
-            <button className="td-cheerbtn" onClick={() => sendCheer(page)}><span className="td-ball" style={{ "--bt": t.c1 }}><span className="td-balltop" /><span className="td-ballband" /><span className="td-ballbtn">♥</span></span>응원볼 던지기</button>
-          </div>
-        </div>
+            {bedNudge && <div className="td-nudge">{bedNudge}</div>}
 
-        <div className="td-week">
-          <h3>📊 이번 주 수면 리듬</h3>
-          <div className="td-bars">
-            {week.map((dk) => {
-              const d = days[dk] || {}; const ma = sleepMinutes(d.a?.bed, d.a?.wake); const mb = sleepMinutes(d.b?.bed, d.b?.wake); const lab = labelDate(dk);
-              return (
-                <button key={dk} className={"td-daycol" + (dk === date ? " sel" : "")} onClick={() => setDate(dk)}>
-                  <div className="td-barpair">
-                    <span className="td-bar" style={{ height: (ma ? Math.min(100, ma / 540 * 100) : 0) + "%", background: THEME.a.c1 }} />
-                    <span className="td-bar" style={{ height: (mb ? Math.min(100, mb / 540 * 100) : 0) + "%", background: THEME.b.c1 }} />
-                  </div>
+            <div className="td-sleepcard">
+              <div className="td-sleephead"><span>😴 오늘 수면</span><b>{fmtSleep(mins)}</b></div>
+              <div className="td-times">
+                <label><i>🌙 잘 때</i><input type="time" value={e.bed} onChange={(ev) => updateEntry(page, { bed: ev.target.value })} /></label>
+                <label><i>☀️ 일어난 때</i><input type="time" value={e.wake} onChange={(ev) => updateEntry(page, { wake: ev.target.value })} /></label>
+              </div>
+              <div className="td-charge"><div className="td-chargefill" style={{ width: charge + "%" }}><span className="td-shimmer" /></div></div>
+              <div className="td-moodmsg">{mood.emoji} {mood.msg}</div>
+              <div className="td-reg">
+                <span>취침 규칙성(이번 주)</span>
+                <span className="td-regdots">{[1, 2, 3, 4, 5].map((i) => <i key={i} style={{ background: i <= reg.dots ? reg.c : "var(--soft)" }} />)}</span>
+                <b style={{ color: reg.c }}>{reg.txt}</b>
+              </div>
+              <div className="td-goalhint">🎯 목표 취침 {g.bedtime} · 기상 {g.wake} · {g.sleepHours}시간</div>
+            </div>
+          </div>
+
+          <div className="td-progress">
+            <div className="td-progitem td-card">
+              <div className="td-proglabel">😴 수면 규칙성</div>
+              <div className="td-progdots">{[1, 2, 3, 4, 5].map((i) => <i key={i} style={{ background: i <= reg.dots ? reg.c : "var(--soft)" }} />)}</div>
+            </div>
+            <div className="td-progitem td-card">
+              <div className="td-proglabel">💪 이번 주 운동 {cur.exDays}/{g.exerciseWeekly}</div>
+              <div className="td-progbar"><div className="td-progfill" style={{ width: exPct + "%" }} /></div>
+            </div>
+          </div>
+
+          <div className="td-card td-maincard">
+            <div className="td-block">
+              <div className="td-blabel">💪 운동</div>
+              <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={onExercise}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
+              {e.exercise && <input className="td-input" placeholder="뭐 했어? (예: 런닝 30분)" value={e.exNote} onChange={(ev) => updateEntry(page, { exNote: ev.target.value })} />}
+            </div>
+            <div className="td-block">
+              <div className="td-blabel">🍪 간식</div>
+              <div className="td-chips">{SNACKS.map((s, i) => (<button key={i} className={"td-chip" + (e.snack === i ? " on" : "")} onClick={() => updateEntry(page, { snack: e.snack === i ? -1 : i })}>{s}</button>))}</div>
+              {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자)" value={e.snackNote} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
+            </div>
+            {page === "b" && (
+              <div className="td-block td-meals">
+                <div className="td-blabel">🍽️ 오늘의 식단</div>
+                <div className="td-mealrow"><span>🌅 아침</span><input className="td-input td-mealinput" placeholder="아침에 뭐 먹었어?" value={e.meals.breakfast} onChange={(ev) => updateMeal(page, "breakfast", ev.target.value)} /></div>
+                <div className="td-mealrow"><span>🌞 점심</span><input className="td-input td-mealinput" placeholder="점심에 뭐 먹었어?" value={e.meals.lunch} onChange={(ev) => updateMeal(page, "lunch", ev.target.value)} /></div>
+                <div className="td-mealrow"><span>🌙 저녁</span><input className="td-input td-mealinput" placeholder="저녁에 뭐 먹었어?" value={e.meals.dinner} onChange={(ev) => updateMeal(page, "dinner", ev.target.value)} /></div>
+              </div>
+            )}
+            <div className="td-block td-gratblock">
+              <div className="td-blabel td-gratlabel">⭐ 오늘의 3감사</div>
+              {[0, 1, 2].map((i) => (<input key={i} className="td-input td-gratinput" placeholder={`${i + 1}. 감사한 일`} value={e.gratitude[i]} onChange={(ev) => { const gg = [...e.gratitude]; gg[i] = ev.target.value; updateEntry(page, { gratitude: gg }); }} />))}
+            </div>
+            <div className="td-block">
+              <div className="td-blabel">📓 한 줄 후기</div>
+              <textarea className="td-area" rows={2} placeholder="오늘 하루는 어땠어?" value={e.reflection} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />
+            </div>
+            <div className="td-cheerrow">
+              {e.cheers > 0 && <span className="td-cheercount">받은 응원 {e.cheers}</span>}
+              <button className="td-cheerbtn" onClick={() => sendCheer(page)}>
+                <span className="td-ball" style={{ "--bt": t.c1 }}><span className="td-balltop" /><span className="td-ballband" /><span className="td-ballbtn">♥</span></span>응원볼 던지기
+                {burstKey > 0 && <span className="td-burst" key={burstKey}>{[...Array(8)].map((_, i) => <b key={i} style={{ "--tx": (i * 10 - 35) + "px", "--dl": (i % 4) * 0.05 + "s" }}>♥</b>)}</span>}
+              </button>
+            </div>
+          </div>
+
+          <button className="td-goalbtn td-card" onClick={() => setShowGoals((v) => !v)}>🎯 {t.name} 목표 설정 {showGoals ? "▲" : "▼"}</button>
+          {showGoals && (
+            <div className="td-goalpanel td-card">
+              <div className="td-goalrow"><label>목표 취침</label><input type="time" value={g.bedtime} onChange={(ev) => saveGoal(page, { bedtime: ev.target.value })} /></div>
+              <div className="td-goalrow"><label>목표 기상</label><input type="time" value={g.wake} onChange={(ev) => saveGoal(page, { wake: ev.target.value })} /></div>
+              <div className="td-goalrow"><label>목표 수면(시간)</label><input type="number" step="0.5" min="4" max="12" value={g.sleepHours} onChange={(ev) => saveGoal(page, { sleepHours: parseFloat(ev.target.value) || 7.5 })} /></div>
+              <div className="td-goalrow"><label>주간 운동(회)</label><input type="number" min="1" max="7" value={g.exerciseWeekly} onChange={(ev) => saveGoal(page, { exerciseWeekly: parseInt(ev.target.value) || 4 })} /></div>
+              <div className="td-goalrow td-goaldays"><label>운동 요일</label><div className="td-daychips">{DOW_MON.map((d, i) => { const on = (g.exerciseDays || []).includes(i); return <button key={i} className={"td-daychip" + (on ? " on" : "")} onClick={() => { const arr = new Set(g.exerciseDays || []); on ? arr.delete(i) : arr.add(i); saveGoal(page, { exerciseDays: [...arr] }); }}>{d}</button>; })}</div></div>
+            </div>
+          )}
+        </>)}
+
+        {view === "review" && (<>
+          <div className="td-review td-card">
+            <h3>📊 {t.name} 이번 주 리뷰</h3>
+            {fb.empty ? (<p className="td-reviewempty">이번 주 기록을 채우면 리뷰가 나와요 🙂</p>) : (<>
+              <div className="td-reviewgrid">
+                <div className="td-rv"><span>평균 수면</span><b>{cur.avg ? fmtSleep(cur.avg) : "—"}</b></div>
+                <div className="td-rv"><span>취침 규칙성</span><b style={{ color: reg.c }}>{reg.txt}</b></div>
+                <div className="td-rv"><span>운동</span><b>{cur.exDays}/{g.exerciseWeekly}회</b></div>
+                <div className="td-rv"><span>지난주 대비</span><b>{fb.trend || "—"}</b></div>
+              </div>
+              {fb.good.length > 0 && <div className="td-fbgood">👏 잘한 점: {fb.good.join(" · ")}</div>}
+              {fb.tip.length > 0 && <div className="td-fbtip">🌱 다음 주 제안: {fb.tip[0]}</div>}
+            </>)}
+          </div>
+          <div className="td-week td-card">
+            <h3>🛌 이번 주 수면 리듬</h3>
+            <div className="td-bars">
+              {thisWeek.map((dk) => {
+                const dd = days[dk] || {}; const ma = sleepMinutes(dd.a?.bed, dd.a?.wake); const mb = sleepMinutes(dd.b?.bed, dd.b?.wake); const lab = labelDate(dk);
+                return (<button key={dk} className={"td-daycol" + (dk === date ? " sel" : "")} onClick={() => { setDate(dk); setView("today"); }}>
+                  <div className="td-barpair"><span className="td-bar" style={{ height: (ma ? Math.min(100, ma / 540 * 100) : 0) + "%", background: THEME.a.c1 }} /><span className="td-bar" style={{ height: (mb ? Math.min(100, mb / 540 * 100) : 0) + "%", background: THEME.b.c1 }} /></div>
                   <span className="td-daylab">{lab.short}</span>
-                </button>
-              );
-            })}
+                </button>);
+              })}
+            </div>
+            <div className="td-legend"><span><i style={{ background: THEME.a.c1 }} />{THEME.a.name}</span><span><i style={{ background: THEME.b.c1 }} />{THEME.b.name}</span></div>
           </div>
-          <div className="td-legend"><span><i style={{ background: THEME.a.c1 }} />{THEME.a.name}</span><span><i style={{ background: THEME.b.c1 }} />{THEME.b.name}</span></div>
-        </div>
+        </>)}
 
-        <div className="td-foot">
-          <span>{loading ? "동기화 중…" : "✓ 실시간 동기화됨"} · 코드: {code}</span>
-          <button onClick={logout}>코드 변경</button>
-        </div>
+        {view === "calendar" && (
+          <div className="td-month td-card">
+            <div className="td-monthhead">
+              <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m - 2, 1))); }}>‹</button>
+              <h3>🗓️ {my_}년 {mm_}월 · {t.name}</h3>
+              <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m, 1))); }}>›</button>
+            </div>
+            <div className="td-monthdow">{DOW_MON.map((d) => <span key={d}>{d}</span>)}</div>
+            <div className="td-monthgrid">
+              {monthCells.map((dk, i) => {
+                if (!dk) return <span key={"e" + i} className="td-mcell empty" />;
+                const en = days[dk]?.[page]; const mm = en ? sleepMinutes(en.bed, en.wake) : null;
+                const slept = mm != null; const goalMet = mm != null && mm >= (g.sleepHours - 0.5) * 60; const ex = en?.exercise;
+                const dnum = parseInt(dk.split("-")[2], 10);
+                return (<button key={dk} className={"td-mcell" + (dk === date ? " sel" : "")} onClick={() => { setDate(dk); setView("today"); }} style={{ background: goalMet ? "var(--soft)" : (slept ? "var(--soft2)" : "transparent") }}>
+                  <span className="td-mnum">{dnum}</span>{ex && <span className="td-mdot" style={{ background: t.c1 }} />}
+                </button>);
+              })}
+            </div>
+            <div className="td-mlegend"><span><i style={{ background: "var(--soft)" }} />수면목표</span><span><i className="dot" style={{ background: t.c1 }} />운동</span></div>
+          </div>
+        )}
+
+        <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 실시간 동기화"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
+
+      {celebrate && <div className="td-confetti" key={celebrate.key}>{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "var(--c1)" : "var(--c2)" }} />)}<div className="td-celebmsg">{celebrate.msg}</div></div>}
+
+      <nav className="td-bottomnav td-glasscard">
+        {[["today", "📝", "오늘"], ["review", "📊", "리뷰"], ["calendar", "🗓️", "캘린더"]].map(([v, ic, lb]) => (
+          <button key={v} className={"td-navbtn" + (view === v ? " on" : "")} onClick={() => setView(v)}><span>{ic}</span>{lb}</button>
+        ))}
+      </nav>
     </div>
   );
 }
 
-const themeVars = (t) => ({ "--c1": t.c1, "--c2": t.c2, "--soft": t.soft, "--soft2": t.soft2, "--grat": t.grat, "--gratline": t.gratLine, "--grattxt": t.gratTxt, "--sky": t.sky });
-
 const css = `
 @import url('https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap');
-.td-wrap{ --ink:#3E3531; --muted:#AEA399; font-family:'Gowun Dodum',system-ui,sans-serif; background:var(--soft2,#FFF1E6); color:var(--ink); min-height:100vh; padding:14px 12px 30px; transition:background .35s; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased; }
+.td-wrap{ --ink:#3E3531; --muted:#AEA399; position:relative; font-family:'Gowun Dodum',system-ui,sans-serif; background:var(--pageBg,#FFF1E6); color:var(--ink); min-height:100vh; padding:12px 12px 92px; transition:background .4s,color .4s; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
 .td-wrap *{ box-sizing:border-box; }
+.td-glow{ position:fixed; top:-15%; left:50%; transform:translateX(-50%); width:120%; height:44%; background:radial-gradient(ellipse at center, var(--glowc) 0%, transparent 70%); opacity:.7; pointer-events:none; z-index:0; transition:background .4s; }
 .td-loading{ text-align:center; padding:80px 0; color:var(--muted); font-family:'Jua'; }
-.td-app{ width:100%; max-width:440px; margin:0 auto; }
+.td-app{ position:relative; z-index:1; width:100%; max-width:460px; margin:0 auto; }
+.td-card{ background:var(--card); border-radius:22px; box-shadow:0 8px 22px var(--shadow), 0 1px 0 rgba(255,255,255,.4) inset; }
+.td-glasscard{ background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border:1px solid var(--line); }
 
-.td-login{ width:100%; max-width:380px; margin:8vh auto 0; background:#fff; border-radius:24px; padding:26px 22px; box-shadow:0 8px 24px rgba(0,0,0,.08); text-align:center; }
+.td-topbar{ display:flex; align-items:center; justify-content:space-between; padding:2px 4px 10px; }
+.td-hello{ font-family:'Jua'; font-size:15px; color:var(--ink); }
+.td-nightbtn{ width:38px; height:38px; border:none; border-radius:50%; background:var(--card); box-shadow:0 3px 10px var(--shadow); font-size:17px; cursor:pointer; }
+
+.td-login{ width:100%; max-width:380px; margin:8vh auto 0; background:var(--card); border-radius:24px; padding:26px 22px; box-shadow:0 10px 30px var(--shadow); text-align:center; position:relative; z-index:1; }
 .td-loginbuddy{ width:90px; height:90px; margin:0 auto 10px; border-radius:50%; background:var(--sky); display:flex; align-items:center; justify-content:center; padding:9px; }
 .td-login h1{ font-family:'Jua'; font-size:26px; margin:0 0 6px; }
 .td-login p{ font-size:14px; color:var(--muted); margin:0 0 18px; }
 .td-whopick{ display:flex; align-items:center; gap:7px; margin:12px 0; flex-wrap:wrap; justify-content:center; font-size:14px; color:var(--muted); }
-.td-whobtn{ border:2px solid var(--soft); background:#fff; color:var(--ink); font-family:'Jua'; font-size:14px; padding:8px 13px; border-radius:999px; cursor:pointer; }
+.td-whobtn{ border:2px solid var(--soft); background:var(--card); color:var(--ink); font-family:'Jua'; font-size:14px; padding:8px 13px; border-radius:999px; cursor:pointer; }
 .td-whobtn.on{ background:var(--tc); border-color:var(--tc); color:#fff; }
 .td-loginbtn{ width:100%; margin-top:8px; padding:14px; border:none; border-radius:14px; background:var(--c1); color:#fff; font-family:'Jua'; font-size:17px; cursor:pointer; }
 .td-loginhint{ display:block; margin-top:12px; color:var(--muted); font-size:12px; }
 
-.td-tabs{ display:flex; gap:8px; margin-bottom:12px; }
-.td-tab{ flex:1; min-width:0; border:none; background:#fff; color:var(--ink); font-family:'Jua'; font-size:14px; padding:11px 6px; border-radius:14px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; opacity:.6; box-shadow:0 2px 6px rgba(0,0,0,.05); }
-.td-tab span{ font-size:15px; } .td-tab.on{ background:var(--tc); color:#fff; opacity:1; }
+.td-tabs{ display:flex; gap:6px; margin-bottom:12px; padding:6px; border-radius:18px; }
+.td-tab{ flex:1; min-width:0; border:none; background:transparent; color:var(--ink); font-family:'Jua'; font-size:14px; padding:10px 6px; border-radius:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; opacity:.6; transition:.2s; }
+.td-tab span{ font-size:15px; } .td-tab.on{ background:var(--tc); color:#fff; opacity:1; box-shadow:0 4px 12px var(--shadow); }
 
 .td-datenav{ display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px; }
-.td-datenav button{ width:34px; height:34px; flex:0 0 auto; border-radius:50%; border:none; background:#fff; font-size:19px; cursor:pointer; color:var(--ink); box-shadow:0 2px 5px rgba(0,0,0,.06); }
+.td-datenav button{ width:34px; height:34px; flex:0 0 auto; border-radius:50%; border:none; background:var(--card); font-size:19px; cursor:pointer; color:var(--ink); box-shadow:0 3px 8px var(--shadow); }
 .td-datenav button:disabled{ opacity:.35; }
 .td-date{ text-align:center; } .td-date b{ font-family:'Jua'; font-size:20px; display:block; line-height:1.15; } .td-date small{ font-size:12px; color:var(--muted); }
 
-.td-hero{ background:#fff; border-radius:22px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.07); margin-bottom:12px; }
-.td-buddywrap{ display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:14px; }
-.td-buddy{ width:84px; height:84px; border-radius:50%; background:var(--sky); display:flex; align-items:center; justify-content:center; padding:8px; }
-.td-name{ font-family:'Jua'; font-size:21px; display:flex; align-items:center; gap:7px; }
+.td-hero{ padding:16px; margin-bottom:12px; }
+.td-buddywrap{ display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:12px; }
+.td-buddy{ position:relative; width:88px; height:88px; border-radius:50%; background:var(--sky); display:flex; align-items:center; justify-content:center; padding:9px; overflow:visible; }
+.td-buddy img,.td-buddy svg{ border-radius:50%; }
+.td-buddy.lvl2{ box-shadow:0 0 0 3px rgba(255,255,255,.5),0 0 18px var(--c1); }
+.td-buddy.lvl3{ box-shadow:0 0 0 3px #FFE08A,0 0 26px var(--c1); }
+.td-spark{ position:absolute; font-size:15px; animation:twinkle 1.8s ease-in-out infinite; }
+.td-spark.s1{ top:-4px; right:-2px; } .td-spark.s2{ bottom:2px; left:-6px; animation-delay:.5s; } .td-spark.s3{ top:6px; left:-4px; animation-delay:.9s; }
+.td-name{ font-family:'Jua'; font-size:21px; display:flex; align-items:center; gap:7px; color:var(--ink); }
 .td-badge{ font-family:'Jua'; font-size:11px; background:var(--c1); color:#fff; padding:3px 9px; border-radius:999px; }
 .td-streak{ font-size:13px; color:var(--muted); }
+.td-nudge{ background:var(--soft2); border:1px dashed var(--c1); color:var(--c2); font-family:'Jua'; font-size:13px; text-align:center; padding:8px; border-radius:12px; margin-bottom:10px; }
 .td-sleepcard{ background:var(--soft2); border-radius:16px; padding:14px; }
 .td-sleephead{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px; }
 .td-sleephead span{ font-family:'Jua'; font-size:16px; } .td-sleephead b{ font-family:'Jua'; font-size:22px; color:var(--c2); }
 .td-times{ display:flex; gap:8px; }
 .td-times label{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted); }
-.td-times input{ width:100%; border:2px solid var(--soft); border-radius:11px; padding:9px 6px; font-family:'Gowun Dodum'; font-size:15px; color:var(--ink); background:#fff; }
-.td-charge{ height:13px; background:var(--soft); border-radius:999px; margin-top:11px; overflow:hidden; }
-.td-chargefill{ height:100%; background:linear-gradient(90deg,var(--c1),var(--c2)); border-radius:999px; transition:width .4s; }
-.td-moodmsg{ font-family:'Jua'; font-size:14px; margin-top:9px; text-align:center; } .td-avg{ color:var(--muted); font-size:12px; }
+.td-times input{ width:100%; border:2px solid var(--soft); border-radius:11px; padding:9px 6px; font-family:'Gowun Dodum'; font-size:15px; color:var(--ink); background:var(--field); }
+.td-charge{ height:14px; background:var(--soft); border-radius:999px; margin-top:11px; overflow:hidden; }
+.td-chargefill{ position:relative; height:100%; background:linear-gradient(90deg,var(--c1),var(--c2)); border-radius:999px; transition:width .5s; overflow:hidden; }
+.td-shimmer{ position:absolute; inset:0; background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.5) 50%,transparent 70%); transform:translateX(-100%); animation:shimmer 2.4s ease-in-out infinite; }
+.td-moodmsg{ font-family:'Jua'; font-size:14px; margin-top:9px; text-align:center; color:var(--ink); }
+.td-reg{ display:flex; align-items:center; gap:8px; margin-top:12px; padding-top:11px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); flex-wrap:wrap; }
+.td-reg b{ font-family:'Jua'; font-size:13px; } .td-regdots{ display:flex; gap:3px; } .td-regdots i{ width:9px; height:9px; border-radius:50%; }
+.td-goalhint{ font-size:12px; color:var(--muted); margin-top:8px; text-align:center; }
 
-.td-card{ background:#fff; border-radius:22px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.07); }
+.td-progress{ display:flex; gap:10px; margin-bottom:12px; }
+.td-progitem{ flex:1; padding:12px 13px; }
+.td-proglabel{ font-family:'Jua'; font-size:13px; margin-bottom:8px; color:var(--ink); }
+.td-progdots{ display:flex; gap:4px; } .td-progdots i{ flex:1; height:8px; border-radius:4px; }
+.td-progbar{ height:8px; background:var(--soft); border-radius:4px; overflow:hidden; } .td-progfill{ height:100%; background:linear-gradient(90deg,var(--c1),var(--c2)); border-radius:4px; transition:width .5s; }
+
+.td-maincard{ padding:16px; }
 .td-block{ margin-bottom:16px; } .td-block:last-of-type{ margin-bottom:8px; }
-.td-blabel{ font-family:'Jua'; font-size:15px; margin-bottom:8px; }
-.td-toggle{ width:100%; padding:13px; border:2px dashed var(--soft); border-radius:13px; background:#fff; font-family:'Jua'; font-size:15px; color:var(--muted); cursor:pointer; }
-.td-toggle.on{ background:var(--c1); border-style:solid; border-color:var(--c1); color:#fff; }
-.td-input{ width:100%; margin-top:9px; padding:11px 13px; border:2px solid var(--soft); border-radius:12px; font-family:'Gowun Dodum'; font-size:15px; background:#fff; color:var(--ink); }
-.td-input::placeholder,.td-area::placeholder{ color:#cabfb4; }
+.td-blabel{ font-family:'Jua'; font-size:15px; margin-bottom:8px; color:var(--ink); }
+.td-toggle{ width:100%; padding:13px; border:2px dashed var(--soft); border-radius:13px; background:var(--field); font-family:'Jua'; font-size:15px; color:var(--muted); cursor:pointer; transition:.15s; }
+.td-toggle.on{ background:var(--c1); border-style:solid; border-color:var(--c1); color:#fff; animation:pop .35s ease; }
+.td-input{ width:100%; margin-top:9px; padding:11px 13px; border:2px solid var(--soft); border-radius:12px; font-family:'Gowun Dodum'; font-size:15px; background:var(--field); color:var(--ink); }
+.td-input::placeholder,.td-area::placeholder{ color:var(--muted); opacity:.7; }
 .td-chips{ display:flex; gap:6px; }
-.td-chip{ flex:1; min-width:0; padding:10px 0; border:2px solid var(--soft); border-radius:11px; background:#fff; font-family:'Jua'; font-size:13px; color:var(--ink); cursor:pointer; }
-.td-chip.on{ background:var(--c1); border-color:var(--c1); color:#fff; }
+.td-chip{ flex:1; min-width:0; padding:10px 0; border:2px solid var(--soft); border-radius:11px; background:var(--field); font-family:'Jua'; font-size:13px; color:var(--ink); cursor:pointer; }
+.td-chip.on{ background:var(--c1); border-color:var(--c1); color:#fff; animation:pop .3s ease; }
+.td-meals .td-mealrow{ display:flex; align-items:center; gap:9px; margin-top:8px; } .td-meals .td-mealrow:first-of-type{ margin-top:0; }
+.td-meals .td-mealrow span{ font-family:'Jua'; font-size:13px; width:52px; flex:0 0 auto; color:var(--ink); }
+.td-mealinput{ margin-top:0; }
 .td-gratblock{ background:var(--grat); border:2px solid var(--gratline); border-radius:15px; padding:13px; }
 .td-gratlabel{ color:var(--grattxt); } .td-gratinput{ margin-top:8px; } .td-gratinput:first-of-type{ margin-top:0; }
-.td-area{ width:100%; padding:11px 13px; border:2px solid var(--soft); border-radius:13px; font-family:'Gowun Dodum'; font-size:15px; resize:vertical; background:#fff; color:var(--ink); }
+.td-area{ width:100%; padding:11px 13px; border:2px solid var(--soft); border-radius:13px; font-family:'Gowun Dodum'; font-size:15px; resize:vertical; background:var(--field); color:var(--ink); }
 .td-cheerrow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
 .td-cheercount{ font-family:'Jua'; font-size:13px; color:var(--c2); }
-.td-cheerbtn{ margin-left:auto; border:2px solid var(--c1); color:var(--c2); background:#fff; padding:10px 16px; border-radius:999px; font-family:'Jua'; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:8px; }
+.td-cheerbtn{ position:relative; margin-left:auto; border:2px solid var(--c1); color:var(--c2); background:var(--card); padding:10px 16px; border-radius:999px; font-family:'Jua'; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:8px; overflow:visible; }
 .td-cheerbtn:active{ transform:scale(.95); }
 .td-ball{ position:relative; width:20px; height:20px; border-radius:50%; overflow:hidden; display:inline-block; border:2px solid #2b2b2b; flex:0 0 auto; background:#fff; }
 .td-balltop{ position:absolute; inset:0 0 50% 0; background:var(--bt); }
 .td-ballband{ position:absolute; top:50%; left:0; right:0; height:3px; transform:translateY(-50%); background:#2b2b2b; }
 .td-ballbtn{ position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:9px; height:9px; background:#fff; border:1.5px solid #2b2b2b; border-radius:50%; font-size:6px; line-height:7px; text-align:center; color:#ff5c8a; }
+.td-burst{ position:absolute; top:50%; left:50%; pointer-events:none; }
+.td-burst b{ position:absolute; color:var(--c1); font-size:14px; animation:floatup .9s ease-out forwards; animation-delay:var(--dl); transform:translate(-50%,-50%); }
 
-.td-week{ background:#fff; border-radius:22px; padding:16px; box-shadow:0 6px 18px rgba(0,0,0,.07); margin-top:12px; }
-.td-week h3{ font-family:'Jua'; font-size:15px; margin:0 0 14px; }
+.td-goalbtn{ width:100%; margin-top:12px; padding:12px; border:none; font-family:'Jua'; font-size:14px; color:var(--c2); cursor:pointer; }
+.td-goalpanel{ padding:14px; margin-top:8px; }
+.td-goalrow{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; } .td-goalrow:last-child{ margin-bottom:0; }
+.td-goalrow label{ font-size:14px; color:var(--ink); flex:0 0 auto; }
+.td-goalrow input{ border:2px solid var(--soft); border-radius:10px; padding:8px 10px; font-family:'Gowun Dodum'; font-size:15px; width:110px; text-align:center; background:var(--field); color:var(--ink); }
+.td-goaldays{ align-items:flex-start; flex-direction:column; }
+.td-daychips{ display:flex; gap:5px; width:100%; }
+.td-daychip{ flex:1; padding:7px 0; border:2px solid var(--soft); border-radius:9px; background:var(--field); font-family:'Jua'; font-size:12px; cursor:pointer; color:var(--ink); }
+.td-daychip.on{ background:var(--c1); border-color:var(--c1); color:#fff; }
+
+.td-review{ padding:16px; margin-bottom:12px; }
+.td-review h3{ font-family:'Jua'; font-size:15px; margin:0 0 12px; color:var(--ink); }
+.td-reviewempty{ color:var(--muted); font-size:14px; text-align:center; margin:8px 0; }
+.td-reviewgrid{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:12px; }
+.td-rv{ background:var(--soft2); border-radius:12px; padding:10px 12px; }
+.td-rv span{ display:block; font-size:12px; color:var(--muted); margin-bottom:3px; } .td-rv b{ font-family:'Jua'; font-size:14px; color:var(--ink); }
+.td-fbgood{ background:var(--good); border-radius:11px; padding:10px 12px; font-size:13px; margin-bottom:7px; color:var(--ink); }
+.td-fbtip{ background:var(--grat); border-radius:11px; padding:10px 12px; font-size:13px; color:var(--ink); }
+
+.td-week{ padding:16px; }
+.td-week h3{ font-family:'Jua'; font-size:15px; margin:0 0 14px; color:var(--ink); }
 .td-bars{ display:flex; gap:5px; align-items:flex-end; }
 .td-daycol{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; background:none; border:none; cursor:pointer; padding:5px 1px; border-radius:9px; }
 .td-daycol.sel{ background:var(--soft); }
 .td-barpair{ display:flex; gap:3px; align-items:flex-end; height:60px; }
-.td-bar{ width:8px; border-radius:5px 5px 0 0; min-height:4px; transition:height .35s; }
+.td-bar{ width:8px; border-radius:5px 5px 0 0; min-height:4px; transition:height .4s; }
 .td-daylab{ font-size:10px; color:var(--muted); font-family:'Jua'; }
 .td-legend{ display:flex; gap:16px; justify-content:center; margin-top:12px; font-size:12px; color:var(--muted); font-family:'Jua'; }
 .td-legend span{ display:flex; align-items:center; gap:5px; } .td-legend i{ width:11px; height:11px; border-radius:4px; }
+
+.td-month{ padding:16px; }
+.td-monthhead{ display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; }
+.td-monthhead h3{ font-family:'Jua'; font-size:15px; margin:0; color:var(--ink); }
+.td-monthhead button{ width:30px; height:30px; border:none; border-radius:50%; background:var(--soft2); font-size:17px; cursor:pointer; color:var(--ink); }
+.td-monthdow{ display:grid; grid-template-columns:repeat(7,1fr); margin-bottom:6px; }
+.td-monthdow span{ text-align:center; font-size:11px; color:var(--muted); font-family:'Jua'; }
+.td-monthgrid{ display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
+.td-mcell{ position:relative; aspect-ratio:1; border:none; border-radius:9px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; background:transparent; }
+.td-mcell.empty{ cursor:default; } .td-mcell.sel{ outline:2px solid var(--c1); }
+.td-mnum{ font-size:12px; color:var(--ink); font-family:'Gowun Dodum'; }
+.td-mdot{ position:absolute; bottom:4px; width:5px; height:5px; border-radius:50%; }
+.td-mlegend{ display:flex; gap:14px; justify-content:center; margin-top:12px; font-size:11px; color:var(--muted); font-family:'Jua'; }
+.td-mlegend span{ display:flex; align-items:center; gap:5px; } .td-mlegend i{ width:12px; height:12px; border-radius:4px; } .td-mlegend i.dot{ width:7px; height:7px; border-radius:50%; }
+
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
-@media (prefers-reduced-motion: reduce){ .td-bar,.td-chargefill,.td-wrap{ transition:none; } }
+
+.td-bottomnav{ position:fixed; left:50%; transform:translateX(-50%); bottom:12px; z-index:20; width:calc(100% - 24px); max-width:436px; display:flex; gap:4px; padding:6px; border-radius:20px; box-shadow:0 8px 24px var(--shadow); }
+.td-navbtn{ flex:1; border:none; background:transparent; color:var(--muted); font-family:'Jua'; font-size:11px; padding:8px 0; border-radius:14px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.td-navbtn span{ font-size:19px; } .td-navbtn.on{ background:var(--c1); color:#fff; }
+
+.td-confetti{ position:fixed; inset:0; pointer-events:none; z-index:40; overflow:hidden; }
+.td-confetti b{ position:absolute; top:-20px; left:var(--l); width:9px; height:14px; border-radius:2px; transform:rotate(var(--rot)); animation:fall 2.1s ease-in forwards; animation-delay:var(--dl); }
+.td-celebmsg{ position:absolute; top:38%; left:50%; transform:translate(-50%,-50%); background:var(--card); color:var(--ink); font-family:'Jua'; font-size:17px; padding:14px 22px; border-radius:16px; box-shadow:0 8px 24px var(--shadow); animation:pop .4s ease; }
+
+@keyframes twinkle{ 0%,100%{ opacity:.4; transform:scale(.8);} 50%{ opacity:1; transform:scale(1.2);} }
+@keyframes shimmer{ 0%{ transform:translateX(-100%);} 60%,100%{ transform:translateX(200%);} }
+@keyframes pop{ 0%{ transform:scale(.9);} 50%{ transform:scale(1.06);} 100%{ transform:scale(1);} }
+@keyframes floatup{ 0%{ opacity:1; transform:translate(-50%,-50%);} 100%{ opacity:0; transform:translate(calc(-50% + var(--tx)),-260%);} }
+@keyframes fall{ 0%{ opacity:1; top:-20px;} 100%{ opacity:.9; top:105%;} }
+.td-breathe{ animation:breathe 3.4s ease-in-out infinite; }
+@keyframes breathe{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.04);} }
+@media (prefers-reduced-motion: reduce){ .td-breathe,.td-shimmer,.td-spark,.td-burst b,.td-confetti b{ animation:none!important; } .td-bar,.td-chargefill,.td-progfill,.td-wrap{ transition:none; } }
 `;
