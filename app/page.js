@@ -26,6 +26,20 @@ const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -
 const blankEntry = () => ({ ...FIELDS(), cheers: 0 });
 const dataForDb = (e) => { const { cheers, ...rest } = e; return rest; };
 const entryFromRow = (row) => { const d = row.data || {}; return { ...FIELDS(), ...d, meals: { breakfast: "", lunch: "", dinner: "", ...(d.meals || {}) }, cheers: row.cheers ?? 0 }; };
+// merge server data into local on poll: keep my own edits, take partner's from server, sync cheers on my slot
+const mergeDays = (prev, server, me) => {
+  const out = {}; const dates = new Set([...Object.keys(prev), ...Object.keys(server)]);
+  dates.forEach((dk) => {
+    const pd = prev[dk] || {}, sd = server[dk] || {}; const day = {};
+    ["a", "b"].forEach((slot) => {
+      const ps = pd[slot], ss = sd[slot];
+      if (slot === me) { if (ps) day[slot] = { ...ps, cheers: ss ? ss.cheers : ps.cheers }; else if (ss) day[slot] = ss; }
+      else { if (ss) day[slot] = ss; else if (ps) day[slot] = ps; }
+    });
+    if (Object.keys(day).length) out[dk] = day;
+  });
+  return out;
+};
 const SNACKS = ["안 먹음", "조금", "보통", "많이"];
 const GOALS_DATE = "__goals__";
 const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [] });
@@ -102,29 +116,26 @@ export default function Page() {
 
   useEffect(() => {
     if (!code) return;
-    let channel;
-    (async () => {
-      setLoading(true);
-      const { data: rows, error } = await supabase.from("entries").select("*").eq("couple_code", code);
-      const nd = {}; const ng = { a: defaultGoal(), b: defaultGoal() };
-      if (!error && rows) rows.forEach((r) => {
+    let alive = true;
+    const parseRows = (rows) => {
+      const nd = {}, ng = { a: defaultGoal(), b: defaultGoal() };
+      (rows || []).forEach((r) => {
         if (r.date === GOALS_DATE) ng[r.slot] = { ...defaultGoal(), ...(r.data || {}) };
         else { nd[r.date] = nd[r.date] || {}; nd[r.date][r.slot] = entryFromRow(r); }
       });
-      setDays(nd); setGoals(ng); setLoading(false);
-      channel = supabase.channel("entries-" + code)
-        .on("postgres_changes", { event: "*", schema: "public", table: "entries", filter: `couple_code=eq.${code}` }, (payload) => {
-          const row = payload.new; if (!row || !row.slot) return;
-          if (row.date === GOALS_DATE) { setGoals((prev) => ({ ...prev, [row.slot]: { ...defaultGoal(), ...(row.data || {}) } })); return; }
-          setDays((prev) => {
-            const day = { ...(prev[row.date] || {}) };
-            if (row.slot === me) { const mine = day[me] || blankEntry(); day[me] = { ...mine, cheers: row.cheers ?? mine.cheers }; }
-            else day[row.slot] = entryFromRow(row);
-            return { ...prev, [row.date]: day };
-          });
-        }).subscribe();
-    })();
-    return () => { if (channel) supabase.removeChannel(channel); };
+      return { nd, ng };
+    };
+    const load = async (initial) => {
+      const { data: rows, error } = await supabase.rpc("gs_get", { p_code: code });
+      if (!alive) return;
+      if (error) { if (initial) setLoading(false); return; }
+      const { nd, ng } = parseRows(rows);
+      if (initial) { setDays(nd); setGoals(ng); setLoading(false); }
+      else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
+    };
+    setLoading(true); load(true);
+    const iv = setInterval(() => load(false), 10000);
+    return () => { alive = false; clearInterval(iv); };
   }, [code, me]);
 
   const login = () => { const c = codeInput.trim().toLowerCase(); if (!c) return; try { localStorage.setItem(LS_CODE, c); localStorage.setItem(LS_ME, meInput); } catch (e) {} setCode(c); setMe(meInput); setPage(meInput); };
@@ -134,12 +145,12 @@ export default function Page() {
   const pushData = (slot, entry) => {
     const k = `${date}:${slot}`;
     if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
-    saveTimers.current[k] = setTimeout(() => { supabase.from("entries").upsert({ couple_code: code, date, slot, data: dataForDb(entry), updated_at: new Date().toISOString() }, { onConflict: "couple_code,date,slot" }).then(() => {}); }, 600);
+    saveTimers.current[k] = setTimeout(() => { supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => {}); }, 600);
   };
   const updateEntry = (slot, patch) => setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; });
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
-  const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.from("entries").upsert({ couple_code: code, date, slot, cheers: entry.cheers, updated_at: new Date().toISOString() }, { onConflict: "couple_code,date,slot" }).then(() => {}); return { ...prev, [date]: day }; }); };
-  const saveGoal = (slot, patch) => setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.from("entries").upsert({ couple_code: code, date: GOALS_DATE, slot, data: g, updated_at: new Date().toISOString() }, { onConflict: "couple_code,date,slot" }).then(() => {}); return next; });
+  const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
+  const saveGoal = (slot, patch) => setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); return next; });
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
 
   const hasEntry = (e) => !!e && (e.bed || e.wake || e.exercise || e.exNote || e.snack >= 0 || e.snackNote || (e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner)) || e.gratitude?.some((g) => g.trim()) || e.reflection?.trim());
@@ -389,7 +400,7 @@ export default function Page() {
           </div>
         )}
 
-        <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 실시간 동기화"} · {code}</span><button onClick={logout}>코드 변경</button></div>
+        <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
 
       {celebrate && <div className="td-confetti" key={celebrate.key}>{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "var(--c1)" : "var(--c2)" }} />)}<div className="td-celebmsg">{celebrate.msg}</div></div>}
