@@ -41,6 +41,7 @@ const mergeDays = (prev, server, me) => {
   return out;
 };
 const SNACKS = ["안 먹음", "조금", "보통", "많이"];
+const MOODS = ["😞", "😕", "😐", "🙂", "😄"];
 const GOALS_DATE = "__goals__";
 const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [], name: "" });
 const VAPID_PUBLIC = "BOi2fKS_xvYbfB75PT7GWfxlY5H_bmxWA-1ySlFSRtCSKutpAB0Ux_MmuUUcp1WCqcxdQofsNv10K1mgvt34RwI";
@@ -105,6 +106,8 @@ export default function Page() {
   const [pushState, setPushState] = useState("loading"); // loading|unsupported|off|on|denied|busy
   const [pushMsg, setPushMsg] = useState("");
   const [savedFlash, setSavedFlash] = useState(null);
+  const [openSet, setOpenSet] = useState({});
+  const [initFilled, setInitFilled] = useState({});
   const saveTimers = useRef({});
 
   useEffect(() => {
@@ -156,6 +159,20 @@ export default function Page() {
     return () => { alive = false; clearInterval(iv); };
   }, [code, me]);
 
+  // 날짜/사람 변경 시: 이미 채워진 항목은 접힌 상태로 시작
+  useEffect(() => {
+    const en = (days[date] && days[date][page]) || blankEntry();
+    setOpenSet({});
+    setInitFilled({
+      ex: !!en.exercise,
+      snack: en.snack >= 0,
+      mood: (en.mood || 0) > 0,
+      meals: !!(en.meals && (en.meals.breakfast || en.meals.lunch || en.meals.dinner)),
+      grat: (en.gratitude || []).some((x) => (x || "").trim()),
+      refl: !!(en.reflection || "").trim(),
+    });
+  }, [date, page, loading]);
+
   const login = () => { const c = codeInput.trim().toLowerCase(); if (!c) return; try { localStorage.setItem(LS_CODE, c); localStorage.setItem(LS_ME, meInput); } catch (e) {} setCode(c); setMe(meInput); setPage(meInput); };
   const logout = () => { try { localStorage.removeItem(LS_CODE); localStorage.removeItem(LS_ME); } catch (e) {} setCode(null); setDays({}); setCodeInput(""); };
 
@@ -165,11 +182,11 @@ export default function Page() {
     if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
     saveTimers.current[k] = setTimeout(() => { supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => {}); }, 600);
   };
-  const updateEntry = (slot, patch) => setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; });
+  const updateEntry = (slot, patch) => { if (slot !== me) return; setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; }); };
   const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
-  const saveGoal = (slot, patch) => setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && slot === me && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; });
+  const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
 
   const togglePush = async () => {
@@ -295,8 +312,11 @@ export default function Page() {
 
   const t = THEME[page]; const g = goals[page]; const e = getEntry(page);
   const names = { a: (goals.a && goals.a.name) || THEME.a.name, b: (goals.b && goals.b.name) || THEME.b.name };
+  const mine = page === me;
+  const yEntry = days[addDays(date, -1)]?.[page];
+  const yb = yEntry && yEntry.bed && yEntry.wake ? yEntry : null;
   const mins = sleepMinutes(e.bed, e.wake); const mood = sleepMood(mins);
-  const charge = mins ? Math.min(100, Math.round((mins / 480) * 100)) : 0;
+  const charge = mins ? Math.min(100, Math.round((mins / (g.sleepHours * 60)) * 100)) : 0;
   const { md, dow } = labelDate(date); const isToday = date === today();
   const thisWeek = weekDates(today()); const lastWeek = weekDates(addDays(today(), -7));
   const cur = metricsFor(page, thisWeek); const prev = metricsFor(page, lastWeek);
@@ -347,7 +367,7 @@ export default function Page() {
       <div className="td-app">
 
         <div className="td-topbar">
-          <span className="td-hello">{greeting()}, {names[page]} {night ? "🌙" : "☀️"}</span>
+          <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}</span>
           <div className="td-topbtns">
             <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
             <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
@@ -360,9 +380,10 @@ export default function Page() {
         </div>
 
         {view === "today" && (<>
+          {!mine && <div className="td-viewonly">👀 {names[page]}의 하루 · 응원볼만 보낼 수 있어요</div>}
           <div className="td-datenav">
             <button onClick={() => setDate(addDays(date, -1))} aria-label="이전">‹</button>
-            <div className="td-date"><b>{md}</b><small>{dow}요일{isToday ? " · 오늘" : ""}</small></div>
+            <div className="td-date"><b>{md}</b><small>{dow}요일{isToday ? " · 오늘" : ""}</small>{!isToday && <button className="td-gototoday" onClick={() => setDate(today())}>오늘로 ↩</button>}</div>
             <button onClick={() => setDate(addDays(date, 1))} disabled={isToday} aria-label="다음">›</button>
           </div>
 
@@ -383,9 +404,10 @@ export default function Page() {
             <div className="td-sleepcard">
               <div className="td-sleephead"><span>😴 오늘 수면</span><b>{fmtSleep(mins)}</b></div>
               <div className="td-times">
-                <label><i>🌙 잘 때</i><input type="time" value={e.bed} onChange={(ev) => updateEntry(page, { bed: ev.target.value })} /></label>
-                <label><i>☀️ 일어난 때</i><input type="time" value={e.wake} onChange={(ev) => updateEntry(page, { wake: ev.target.value })} /></label>
+                <label><i>🌙 잘 때</i><input type="time" value={e.bed} disabled={!mine} onChange={(ev) => updateEntry(page, { bed: ev.target.value })} /></label>
+                <label><i>☀️ 일어난 때</i><input type="time" value={e.wake} disabled={!mine} onChange={(ev) => updateEntry(page, { wake: ev.target.value })} /></label>
               </div>
+              {mine && yb && (!e.bed || !e.wake) && <button className="td-yesterday" onClick={() => updateEntry(page, { bed: yb.bed, wake: yb.wake })}>↩ 어제와 같게 ({yb.bed} → {yb.wake})</button>}
               <div className="td-charge"><div className="td-chargefill" style={{ width: charge + "%" }}><span className="td-shimmer" /></div></div>
               <div className="td-moodmsg">{mood.emoji} {mood.msg}</div>
               <div className="td-reg">
@@ -410,62 +432,70 @@ export default function Page() {
           </div>
 
           <div className="td-card td-maincard">
-            <div className="td-block">
-              <div className="td-blabel">💪 운동</div>
-              <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={onExercise}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
-              {e.exercise && <input className="td-input" placeholder="뭐 했어? (예: 런닝 30분)" value={e.exNote} onChange={(ev) => updateEntry(page, { exNote: ev.target.value })} />}
-            </div>
-            <div className="td-block">
-              <div className="td-blabel">🍪 간식</div>
-              <div className="td-chips">{SNACKS.map((s, i) => (<button key={i} className={"td-chip" + (e.snack === i ? " on" : "")} onClick={() => updateEntry(page, { snack: e.snack === i ? -1 : i })}>{s}</button>))}</div>
-              {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자)" value={e.snackNote} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
-            </div>
-            <div className="td-block">
-              <div className="td-blabel">🙂 오늘 기분</div>
-              <div className="td-chips">
-                {["😞","😕","😐","🙂","😄"].map((m2, i) => (
-                  <button key={i} className={"td-chip td-moodchip" + (e.mood === i + 1 ? " on" : "")} onClick={() => updateEntry(page, { mood: e.mood === i + 1 ? 0 : i + 1 })}>{m2}</button>
-                ))}
-              </div>
-            </div>
-            {page === "b" && (
-              <div className="td-block td-meals">
-                <div className="td-blabel">🍽️ 오늘의 식단</div>
-                <div className="td-mealrow"><span>🌅 아침</span><input className="td-input td-mealinput" placeholder="아침에 뭐 먹었어?" value={e.meals.breakfast} onChange={(ev) => updateMeal(page, "breakfast", ev.target.value)} /></div>
-                <div className="td-mealrow"><span>🌞 점심</span><input className="td-input td-mealinput" placeholder="점심에 뭐 먹었어?" value={e.meals.lunch} onChange={(ev) => updateMeal(page, "lunch", ev.target.value)} /></div>
-                <div className="td-mealrow"><span>🌙 저녁</span><input className="td-input td-mealinput" placeholder="저녁에 뭐 먹었어?" value={e.meals.dinner} onChange={(ev) => updateMeal(page, "dinner", ev.target.value)} /></div>
+            {[
+              { k: "ex", label: "💪 운동", filled: !!e.exercise, sum: e.exercise ? ("완료" + (e.exNote ? " · " + e.exNote : "")) : "미기록",
+                body: (<>
+                  <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={onExercise} disabled={!mine}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
+                  {e.exercise && <input className="td-input" placeholder="뭐 했어? (예: 런닝 30분)" value={e.exNote} disabled={!mine} onChange={(ev) => updateEntry(page, { exNote: ev.target.value })} />}
+                </>) },
+              { k: "snack", label: "🍪 간식", filled: e.snack >= 0, sum: e.snack >= 0 ? (SNACKS[e.snack] + (e.snackNote ? " · " + e.snackNote : "")) : "미기록",
+                body: (<>
+                  <div className="td-chips">{SNACKS.map((s, i) => (<button key={i} className={"td-chip" + (e.snack === i ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { snack: e.snack === i ? -1 : i })}>{s}</button>))}</div>
+                  {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자)" value={e.snackNote} disabled={!mine} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
+                </>) },
+              { k: "mood", label: "🙂 오늘 기분", filled: (e.mood || 0) > 0, sum: (e.mood || 0) > 0 ? MOODS[e.mood - 1] : "미기록",
+                body: (<div className="td-chips">{MOODS.map((m2, i) => (<button key={i} className={"td-chip td-moodchip" + (e.mood === i + 1 ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { mood: e.mood === i + 1 ? 0 : i + 1 })}>{m2}</button>))}</div>) },
+              ...(page === "b" ? [{ k: "meals", label: "🍽️ 오늘의 식단", cls: " td-meals", filled: !!(e.meals.breakfast || e.meals.lunch || e.meals.dinner), sum: [e.meals.breakfast, e.meals.lunch, e.meals.dinner].filter(Boolean).join(" / ") || "미기록",
+                body: (<>
+                  <div className="td-mealrow"><span>🌅 아침</span><input className="td-input td-mealinput" placeholder="아침에 뭐 먹었어?" value={e.meals.breakfast} disabled={!mine} onChange={(ev) => updateMeal(page, "breakfast", ev.target.value)} /></div>
+                  <div className="td-mealrow"><span>🌞 점심</span><input className="td-input td-mealinput" placeholder="점심에 뭐 먹었어?" value={e.meals.lunch} disabled={!mine} onChange={(ev) => updateMeal(page, "lunch", ev.target.value)} /></div>
+                  <div className="td-mealrow"><span>🌙 저녁</span><input className="td-input td-mealinput" placeholder="저녁에 뭐 먹었어?" value={e.meals.dinner} disabled={!mine} onChange={(ev) => updateMeal(page, "dinner", ev.target.value)} /></div>
+                </>) }] : []),
+              { k: "grat", label: "⭐ 오늘의 3감사", cls: " td-gratblock", labelCls: " td-gratlabel", filled: (e.gratitude || []).some((x) => (x || "").trim()), sum: (e.gratitude || []).filter((x) => (x || "").trim()).length ? (e.gratitude || []).filter((x) => (x || "").trim()).length + "개 작성" : "미기록",
+                body: (<>{[0, 1, 2].map((i) => (<input key={i} className="td-input td-gratinput" placeholder={`${i + 1}. 감사한 일`} value={e.gratitude[i]} disabled={!mine} onChange={(ev) => { const gg = [...e.gratitude]; gg[i] = ev.target.value; updateEntry(page, { gratitude: gg }); }} />))}</>) },
+              { k: "refl", label: "📓 한 줄 후기", filled: !!(e.reflection || "").trim(), sum: (e.reflection || "").trim() ? ((e.reflection || "").length > 22 ? (e.reflection || "").slice(0, 22) + "…" : e.reflection) : "미기록",
+                body: (<textarea className="td-area" rows={2} placeholder="오늘 하루는 어땠어?" value={e.reflection} disabled={!mine} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />) },
+            ].map((b) => {
+              const open = openSet[b.k] != null ? openSet[b.k] : (mine ? !initFilled[b.k] : false);
+              return (
+                <div key={b.k} className={"td-block" + (b.cls || "")}>
+                  <button className="td-bhead" onClick={() => setOpenSet((o) => ({ ...o, [b.k]: !open }))}>
+                    <span className={"td-blabel2" + (b.labelCls || "")}>{b.label}</span>
+                    {!open && <span className={"td-bsum" + (b.filled ? " ok" : "")}>{b.filled ? "✓ " : ""}{b.sum}</span>}
+                    <i className="td-bcaret">{open ? "▴" : "▾"}</i>
+                  </button>
+                  {open && <div className="td-bbody">{b.body}</div>}
+                </div>
+              );
+            })}
+            {(e.cheers > 0 || !mine) && (
+              <div className="td-cheerrow">
+                {e.cheers > 0 && <span className="td-cheercount">받은 응원 {e.cheers}</span>}
+                {!mine && (
+                  <button className="td-cheerbtn" onClick={() => sendCheer(page)}>
+                    <span className="td-ball" style={{ "--bt": t.c1 }}><span className="td-balltop" /><span className="td-ballband" /><span className="td-ballbtn">♥</span></span>{names[page]}에게 응원볼
+                    {burstKey > 0 && <span className="td-burst" key={burstKey}>{[...Array(8)].map((_, i) => <b key={i} style={{ "--tx": (i * 10 - 35) + "px", "--dl": (i % 4) * 0.05 + "s" }}>♥</b>)}</span>}
+                  </button>
+                )}
               </div>
             )}
-            <div className="td-block td-gratblock">
-              <div className="td-blabel td-gratlabel">⭐ 오늘의 3감사</div>
-              {[0, 1, 2].map((i) => (<input key={i} className="td-input td-gratinput" placeholder={`${i + 1}. 감사한 일`} value={e.gratitude[i]} onChange={(ev) => { const gg = [...e.gratitude]; gg[i] = ev.target.value; updateEntry(page, { gratitude: gg }); }} />))}
-            </div>
-            <div className="td-block">
-              <div className="td-blabel">📓 한 줄 후기</div>
-              <textarea className="td-area" rows={2} placeholder="오늘 하루는 어땠어?" value={e.reflection} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />
-            </div>
-            <div className="td-cheerrow">
-              {e.cheers > 0 && <span className="td-cheercount">받은 응원 {e.cheers}</span>}
-              <button className="td-cheerbtn" onClick={() => sendCheer(page)}>
-                <span className="td-ball" style={{ "--bt": t.c1 }}><span className="td-balltop" /><span className="td-ballband" /><span className="td-ballbtn">♥</span></span>응원볼 던지기
-                {burstKey > 0 && <span className="td-burst" key={burstKey}>{[...Array(8)].map((_, i) => <b key={i} style={{ "--tx": (i * 10 - 35) + "px", "--dl": (i % 4) * 0.05 + "s" }}>♥</b>)}</span>}
-              </button>
-            </div>
-            <div className="td-savebar">
-              <button className="td-savebtn" onClick={() => flushSave(page)}>💾 지금 저장하기</button>
-              {savedFlash && savedFlash.slot === page && <span className="td-savedok">저장됨 ✓</span>}
-            </div>
+            {mine && (
+              <div className="td-savebar">
+                <button className="td-savebtn" onClick={() => flushSave(page)}>💾 지금 저장하기</button>
+                {savedFlash && savedFlash.slot === page && <span className="td-savedok">저장됨 ✓</span>}
+              </div>
+            )}
           </div>
 
-          <button className="td-goalbtn td-card" onClick={() => setShowGoals((v) => !v)}>🎯 {names[page]} 목표 설정 {showGoals ? "▲" : "▼"}</button>
+          <button className="td-goalbtn td-card" onClick={() => setShowGoals((v) => !v)}>🎯 {names[page]} {mine ? "목표 설정" : "목표 보기"} {showGoals ? "▲" : "▼"}</button>
           {showGoals && (
             <div className="td-goalpanel td-card">
-              <div className="td-goalrow"><label>이름</label><input type="text" value={g.name || ""} placeholder={THEME[page].name} onChange={(ev) => saveGoal(page, { name: ev.target.value })} style={{ width: 140 }} /></div>
-              <div className="td-goalrow"><label>목표 취침</label><input type="time" value={g.bedtime} onChange={(ev) => saveGoal(page, { bedtime: ev.target.value })} /></div>
-              <div className="td-goalrow"><label>목표 기상</label><input type="time" value={g.wake} onChange={(ev) => saveGoal(page, { wake: ev.target.value })} /></div>
-              <div className="td-goalrow"><label>목표 수면(시간)</label><input type="number" step="0.5" min="4" max="12" value={g.sleepHours} onChange={(ev) => saveGoal(page, { sleepHours: parseFloat(ev.target.value) || 7.5 })} /></div>
-              <div className="td-goalrow"><label>주간 운동(회)</label><input type="number" min="1" max="7" value={g.exerciseWeekly} onChange={(ev) => saveGoal(page, { exerciseWeekly: parseInt(ev.target.value) || 4 })} /></div>
-              <div className="td-goalrow td-goaldays"><label>운동 요일</label><div className="td-daychips">{DOW_MON.map((d, i) => { const on = (g.exerciseDays || []).includes(i); return <button key={i} className={"td-daychip" + (on ? " on" : "")} onClick={() => { const arr = new Set(g.exerciseDays || []); on ? arr.delete(i) : arr.add(i); saveGoal(page, { exerciseDays: [...arr] }); }}>{d}</button>; })}</div></div>
+              <div className="td-goalrow"><label>이름</label><input type="text" value={g.name || ""} placeholder={THEME[page].name} disabled={!mine} onChange={(ev) => saveGoal(page, { name: ev.target.value })} style={{ width: 140 }} /></div>
+              <div className="td-goalrow"><label>목표 취침</label><input type="time" value={g.bedtime} disabled={!mine} onChange={(ev) => saveGoal(page, { bedtime: ev.target.value })} /></div>
+              <div className="td-goalrow"><label>목표 기상</label><input type="time" value={g.wake} disabled={!mine} onChange={(ev) => saveGoal(page, { wake: ev.target.value })} /></div>
+              <div className="td-goalrow"><label>목표 수면(시간)</label><input type="number" step="0.5" min="4" max="12" value={g.sleepHours} disabled={!mine} onChange={(ev) => saveGoal(page, { sleepHours: parseFloat(ev.target.value) || 7.5 })} /></div>
+              <div className="td-goalrow"><label>주간 운동(회)</label><input type="number" min="1" max="7" value={g.exerciseWeekly} disabled={!mine} onChange={(ev) => saveGoal(page, { exerciseWeekly: parseInt(ev.target.value) || 4 })} /></div>
+              <div className="td-goalrow td-goaldays"><label>운동 요일</label><div className="td-daychips">{DOW_MON.map((d, i) => { const on = (g.exerciseDays || []).includes(i); return <button key={i} className={"td-daychip" + (on ? " on" : "")} disabled={!mine} onClick={() => { const arr = new Set(g.exerciseDays || []); on ? arr.delete(i) : arr.add(i); saveGoal(page, { exerciseDays: [...arr] }); }}>{d}</button>; })}</div></div>
             </div>
           )}
         </>)}
@@ -709,6 +739,17 @@ const css = `
 .td-savedok{ font-family:'Jua'; font-size:13px; color:#3DAE7B; animation:pop .3s ease; }
 .td-monthreport{ padding:16px; margin-top:12px; }
 .td-monthreport h3{ font-family:'Jua'; font-size:15px; margin:0 0 12px; color:var(--ink); }
+.td-viewonly{ text-align:center; font-family:'Jua'; font-size:12px; color:var(--muted); background:var(--glass); border:1px dashed var(--line); border-radius:12px; padding:8px; margin-bottom:10px; }
+.td-gototoday{ display:block; margin:5px auto 0; border:none; background:var(--soft); color:var(--c2); font-family:'Jua'; font-size:11px; padding:3px 12px; border-radius:999px; cursor:pointer; }
+.td-yesterday{ width:100%; margin-top:9px; padding:9px; border:1px dashed var(--soft); border-radius:11px; background:transparent; color:var(--muted); font-family:'Jua'; font-size:13px; cursor:pointer; }
+.td-bhead{ width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; padding:0; cursor:pointer; text-align:left; }
+.td-blabel2{ font-family:'Jua'; font-size:15px; color:var(--ink); }
+.td-bsum{ margin-left:auto; font-size:12px; color:var(--muted); max-width:56%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.td-bsum.ok{ color:var(--c2); font-family:'Jua'; }
+.td-bcaret{ font-style:normal; color:var(--muted); font-size:11px; flex:0 0 auto; }
+.td-bbody{ margin-top:9px; }
+.td-maincard input:disabled,.td-maincard textarea:disabled,.td-times input:disabled,.td-goalrow input:disabled{ opacity:.95; }
+.td-toggle:disabled,.td-chip:disabled,.td-daychip:disabled{ cursor:default; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
