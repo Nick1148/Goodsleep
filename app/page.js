@@ -22,7 +22,7 @@ const sleepMood = (m) => {
   return { emoji: "💤", msg: "든든하게 충전 완료!", sleepy: false };
 };
 const greeting = () => { const h = new Date().getHours(); if (h < 6) return "늦은 밤이야"; if (h < 12) return "좋은 아침이야"; if (h < 18) return "좋은 오후야"; if (h < 22) return "좋은 저녁이야"; return "좋은 밤이야"; };
-const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, gratitude: ["", "", ""], reflection: "" });
+const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, mood: 0, gratitude: ["", "", ""], reflection: "" });
 const blankEntry = () => ({ ...FIELDS(), cheers: 0 });
 const dataForDb = (e) => { const { cheers, ...rest } = e; return rest; };
 const entryFromRow = (row) => { const d = row.data || {}; return { ...FIELDS(), ...d, meals: { breakfast: "", lunch: "", dinner: "", ...(d.meals || {}) }, cheers: row.cheers ?? 0 }; };
@@ -194,7 +194,7 @@ export default function Page() {
     } catch (e) { setPushState("off"); setPushMsg("알림 설정에 실패했어요. 잠시 후 다시 시도해줘요."); }
   };
 
-  const hasEntry = (e) => !!e && (e.bed || e.wake || e.exercise || e.exNote || e.snack >= 0 || e.snackNote || (e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner)) || e.gratitude?.some((g) => g.trim()) || e.reflection?.trim());
+  const hasEntry = (e) => !!e && (e.bed || e.wake || e.exercise || e.exNote || e.snack >= 0 || e.snackNote || e.mood > 0 || (e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner)) || e.gratitude?.some((g) => g.trim()) || e.reflection?.trim());
   const streakFor = (slot) => { let n = 0, cur = today(); for (let i = 0; i < 400; i++) { const d = days[cur]; if (d && hasEntry(d[slot])) { n++; cur = addDays(cur, -1); } else break; } return n; };
 
   const weekDates = (ref) => { const [y, m, d] = ref.split("-").map(Number); const dt = new Date(y, m - 1, d); const dow = (dt.getDay() + 6) % 7; const mon = new Date(y, m - 1, d - dow); return [...Array(7)].map((_, i) => ymd(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i))); };
@@ -214,6 +214,40 @@ export default function Page() {
     let trend = "";
     if (prev.avg != null && cur.avg != null) { if (cur.avg > prev.avg + 15) trend = "지난주보다 더 잤어요 ↑"; else if (cur.avg < prev.avg - 15) trend = "지난주보다 덜 잤어요 ↓"; else trend = "지난주와 비슷해요 →"; }
     return { good, tip, trend, empty: cur.nSleep === 0 && cur.exDays === 0 && cur.logged === 0 };
+  };
+
+  // 3번: 최근 14일 수면 빚 (부족은 쌓이고, 더 잔 날은 갚아짐)
+  const sleepDebtFor = (slot, goal) => {
+    let net = 0, n = 0;
+    for (let i = 0; i < 14; i++) {
+      const e2 = days[addDays(today(), -i)]?.[slot];
+      const m = e2 ? sleepMinutes(e2.bed, e2.wake) : null;
+      if (m != null) { n++; net += goal.sleepHours * 60 - m; }
+    }
+    return { debt: Math.max(0, Math.round(net)), n };
+  };
+  // 5번: 수면 <-> 기분 상관 인사이트 (최근 14일)
+  const moodInsightFor = (slot, goal) => {
+    const good = [], bad = [];
+    for (let i = 0; i < 14; i++) {
+      const e2 = days[addDays(today(), -i)]?.[slot];
+      if (!e2 || !e2.mood) continue;
+      const m = sleepMinutes(e2.bed, e2.wake);
+      if (m == null) continue;
+      (m >= goal.sleepHours * 60 - 30 ? good : bad).push(e2.mood);
+    }
+    if (good.length >= 2 && bad.length >= 2) {
+      const avg = (x) => x.reduce((s, v) => s + v, 0) / x.length;
+      const ga = avg(good), ba = avg(bad);
+      if (ga - ba >= 0.4) return `잘 잔 날 기분이 더 좋았어요 (${ga.toFixed(1)} vs ${ba.toFixed(1)}) 🙂`;
+    }
+    return null;
+  };
+  // 4번: 이번 주 우리 둘 공동 지표
+  const coupleWeek = (weekArr) => {
+    let cheersTotal = 0, bothDays = 0;
+    weekArr.forEach((dk) => { if (dk > today()) return; const d = days[dk] || {}; cheersTotal += (d.a?.cheers || 0) + (d.b?.cheers || 0); if (hasEntry(d.a) && hasEntry(d.b)) bothDays++; });
+    return { cheersTotal, bothDays };
   };
 
   const wrapStyle = ready ? themeVars(THEME[page || "a"], night) : themeVars(THEME.a, false);
@@ -248,6 +282,10 @@ export default function Page() {
   const cur = metricsFor(page, thisWeek); const prev = metricsFor(page, lastWeek);
   const reg = regLabel(cur.spread); const fb = makeFeedback(cur, prev, g);
   const exPct = Math.min(100, Math.round((cur.exDays / Math.max(1, g.exerciseWeekly)) * 100));
+  const sd = sleepDebtFor(page, g);
+  const sdColor = sd.debt === 0 ? "#3DAE7B" : sd.debt <= 120 ? "#6FB98F" : sd.debt <= 300 ? "#E0A23B" : "#DC6B57";
+  const moodTip = moodInsightFor(page, g);
+  const cw = coupleWeek(thisWeek);
   const streak = streakFor(page);
   const lvl = streak >= 14 ? 3 : streak >= 7 ? 2 : streak >= 3 ? 1 : 0;
 
@@ -330,6 +368,7 @@ export default function Page() {
                 <span className="td-regdots">{[1, 2, 3, 4, 5].map((i) => <i key={i} style={{ background: i <= reg.dots ? reg.c : "var(--soft)" }} />)}</span>
                 <b style={{ color: reg.c }}>{reg.txt}</b>
               </div>
+              <div className="td-debt">🧾 최근 14일 수면 빚 <b style={{ color: sdColor }}>{sd.debt === 0 ? (sd.n > 0 ? "없음! 🎉" : "—") : fmtSleep(sd.debt)}</b></div>
               <div className="td-goalhint">🎯 목표 취침 {g.bedtime} · 기상 {g.wake} · {g.sleepHours}시간</div>
             </div>
           </div>
@@ -355,6 +394,14 @@ export default function Page() {
               <div className="td-blabel">🍪 간식</div>
               <div className="td-chips">{SNACKS.map((s, i) => (<button key={i} className={"td-chip" + (e.snack === i ? " on" : "")} onClick={() => updateEntry(page, { snack: e.snack === i ? -1 : i })}>{s}</button>))}</div>
               {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자)" value={e.snackNote} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
+            </div>
+            <div className="td-block">
+              <div className="td-blabel">🙂 오늘 기분</div>
+              <div className="td-chips">
+                {["😞","😕","😐","🙂","😄"].map((m2, i) => (
+                  <button key={i} className={"td-chip td-moodchip" + (e.mood === i + 1 ? " on" : "")} onClick={() => updateEntry(page, { mood: e.mood === i + 1 ? 0 : i + 1 })}>{m2}</button>
+                ))}
+              </div>
             </div>
             {page === "b" && (
               <div className="td-block td-meals">
@@ -397,15 +444,26 @@ export default function Page() {
           <div className="td-review td-card">
             <h3>📊 {t.name} 이번 주 리뷰</h3>
             {fb.empty ? (<p className="td-reviewempty">이번 주 기록을 채우면 리뷰가 나와요 🙂</p>) : (<>
+              {fb.good.length > 0 && <div className="td-fbgood">👏 잘한 점: {fb.good.join(" · ")}</div>}
               <div className="td-reviewgrid">
                 <div className="td-rv"><span>평균 수면</span><b>{cur.avg ? fmtSleep(cur.avg) : "—"}</b></div>
                 <div className="td-rv"><span>취침 규칙성</span><b style={{ color: reg.c }}>{reg.txt}</b></div>
                 <div className="td-rv"><span>운동</span><b>{cur.exDays}/{g.exerciseWeekly}회</b></div>
+                <div className="td-rv"><span>수면 빚(14일)</span><b style={{ color: sdColor }}>{sd.debt === 0 ? "없음 🎉" : fmtSleep(sd.debt)}</b></div>
                 <div className="td-rv"><span>지난주 대비</span><b>{fb.trend || "—"}</b></div>
+                <div className="td-rv"><span>기록한 날</span><b>{cur.logged}일</b></div>
               </div>
-              {fb.good.length > 0 && <div className="td-fbgood">👏 잘한 점: {fb.good.join(" · ")}</div>}
+              {moodTip && <div className="td-fbgood">💡 {moodTip}</div>}
               {fb.tip.length > 0 && <div className="td-fbtip">🌱 다음 주 제안: {fb.tip[0]}</div>}
             </>)}
+          </div>
+          <div className="td-couple td-card">
+            <h3>💞 이번 주 우리 둘</h3>
+            <div className="td-couplerow">
+              <div className="td-rv"><span>함께 기록한 날</span><b>{cw.bothDays}일</b></div>
+              <div className="td-rv"><span>주고받은 응원</span><b>{cw.cheersTotal}개</b></div>
+            </div>
+            <p className="td-couplemsg">{cw.bothDays >= 5 ? "이번 주도 둘 다 꾸준했어요, 최고! 🎉" : cw.bothDays >= 2 ? "함께 쌓아가는 중이에요 🌱" : "이번 주도 같이 시작해볼까요? 😊"}</p>
           </div>
           <div className="td-week td-card">
             <h3>🛌 이번 주 수면 리듬</h3>
@@ -597,6 +655,12 @@ const css = `
 .td-mlegend{ display:flex; gap:14px; justify-content:center; margin-top:12px; font-size:11px; color:var(--muted); font-family:'Jua'; }
 .td-mlegend span{ display:flex; align-items:center; gap:5px; } .td-mlegend i{ width:12px; height:12px; border-radius:4px; } .td-mlegend i.dot{ width:7px; height:7px; border-radius:50%; }
 
+.td-debt{ font-size:13px; color:var(--muted); margin-top:9px; text-align:center; } .td-debt b{ font-family:'Jua'; }
+.td-moodchip{ font-size:19px; padding:8px 0; }
+.td-couple{ padding:16px; margin-bottom:12px; }
+.td-couple h3{ font-family:'Jua'; font-size:15px; margin:0 0 10px; color:var(--ink); }
+.td-couplerow{ display:grid; grid-template-columns:1fr 1fr; gap:9px; margin-bottom:10px; }
+.td-couplemsg{ font-family:'Jua'; font-size:13px; color:var(--c2); text-align:center; margin:0; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
