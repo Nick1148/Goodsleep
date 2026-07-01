@@ -1,5 +1,4 @@
-// 10분마다 실행: 각 구독자의 로컬 시간 기준으로 취침 리마인더 / 주간 리뷰 발송
-// GitHub cron이 지연/스킵돼도 잡히도록 발송 창을 넓게(취침 75분 전 ~ 30분 후) 잡음
+// 10분마다 실행: 취침 10분 전 리마인더 / 주간 리뷰(일요일) / 월간 리포트(매월 말일) 발송
 const webpush = require("web-push");
 
 const { SUPABASE_URL, ANON, BACKUP_SECRET, VAPID_PUBLIC, VAPID_PRIVATE } = process.env;
@@ -8,6 +7,7 @@ webpush.setVapidDetails("mailto:goodsleep@nick.app", VAPID_PUBLIC, VAPID_PRIVATE
 const pad = (n) => String(n).padStart(2, "0");
 const BED_MSG = { title: "우리의 하루", body: "테사호드관이 명령한다. 자라. 🌙", tag: "bed" };
 const REVIEW_MSG = { title: "우리의 하루", body: "이번 주 너의 행동일지 리뷰야, 확인하장 📊", tag: "review" };
+const MONTHLY_MSG = { title: "우리의 하루", body: "이번 달 리포트가 나왔어요 📅 확인해볼까요?", tag: "monthly" };
 
 async function rpc(fn, body) {
   const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
@@ -49,11 +49,11 @@ async function send(row, msg) {
     const [bh, bm] = (row.bedtime || "23:30").split(":").map(Number);
     const bed = bh * 60 + bm;
 
-    // 취침 리마인더: 취침 75분 전 ~ 30분 후 (자정 넘김 안전 계산), 하루 1회
-    const start = (bed - 75 + 1440) % 1440;
-    const diff = (lHM - start + 1440) % 1440;
-    const inBed = diff <= 105;
-    console.log(`${row.slot}: localTime=${pad(Math.floor(lHM/60))}:${pad(lHM%60)} bed=${row.bedtime} inWindow=${inBed} last_bed=${row.last_bed}`);
+    // 취침 리마인더: 목표 취침 정확히 10분 전 기준, ±5분 창(10분 cron 대응), 하루 1회
+    const target = (bed - 10 + 1440) % 1440;
+    const diff = Math.min((lHM - target + 1440) % 1440, (target - lHM + 1440) % 1440);
+    const inBed = diff <= 5;
+    console.log(`${row.slot}: local=${pad(Math.floor(lHM/60))}:${pad(lHM%60)} bedtime=${row.bedtime} target=${pad(Math.floor(target/60))}:${pad(target%60)} inWindow=${inBed} last_bed=${row.last_bed}`);
     if (inBed && row.last_bed !== localDate) {
       if (await send(row, BED_MSG)) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "bed", p_date: localDate }); sent++; }
     }
@@ -61,6 +61,13 @@ async function send(row, msg) {
     // 주간 리뷰: 일요일 19:30~21:30 로컬, 주 1회
     if (lDow === 0 && lHM >= 19 * 60 + 30 && lHM <= 21 * 60 + 30 && row.last_review !== localDate) {
       if (await send(row, REVIEW_MSG)) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "review", p_date: localDate }); sent++; }
+    }
+
+    // 월간 리포트: 매월 마지막날 20:00~22:00 로컬, 월 1회
+    const tomorrow = new Date(local.getTime() + 86400000);
+    const isLastDayOfMonth = tomorrow.getUTCMonth() !== local.getUTCMonth();
+    if (isLastDayOfMonth && lHM >= 20 * 60 && lHM <= 22 * 60 && row.last_monthly !== localDate) {
+      if (await send(row, MONTHLY_MSG)) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "monthly", p_date: localDate }); sent++; }
     }
   }
   console.log(`done. sent=${sent}, subscribers=${rows.length}`);
