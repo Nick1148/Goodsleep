@@ -1,0 +1,54 @@
+name: Weekly Backup
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'   # 매주 일요일 18:00 UTC (한국 월요일 새벽 3시)
+  workflow_dispatch: {}      # 수동 실행 버튼
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch backup from Supabase
+        env:
+          SUPABASE_URL: https://cfztxjblbwrxtsvlpnyp.supabase.co
+          ANON: sb_publishable_tGZr2Zsa-iLW-Hr2sNUNkg_QYbGPt8G
+          BACKUP_SECRET: ${{ secrets.BACKUP_SECRET }}
+        run: |
+          mkdir -p backups
+          DATE=$(date +%F)
+          FILE="backups/backup-$DATE.json"
+          HTTP=$(curl -s -w "%{http_code}" -o "$FILE" \
+            -X POST "$SUPABASE_URL/rest/v1/rpc/gs_backup" \
+            -H "apikey: $ANON" \
+            -H "Authorization: Bearer $ANON" \
+            -H "Content-Type: application/json" \
+            -d "{\"p_secret\":\"$BACKUP_SECRET\"}")
+          echo "HTTP status: $HTTP"
+          if [ "$HTTP" != "200" ]; then
+            echo "❌ 백업 실패 (HTTP $HTTP)"; cat "$FILE" || true; exit 1
+          fi
+          BYTES=$(wc -c < "$FILE")
+          echo "백업 크기: $BYTES bytes"
+          if [ "$BYTES" -lt 3 ]; then
+            echo "❌ 백업이 비어있음 — BACKUP_SECRET이 틀렸을 수 있어요"; exit 1
+          fi
+          echo "✅ 백업 성공: $FILE"
+
+      - name: Commit backup
+        run: |
+          git config user.name "backup-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add backups/
+          if git diff --staged --quiet; then
+            echo "변경 없음 — 커밋 생략"
+          else
+            git commit -m "weekly backup $(date +%F)"
+            git push
+          fi
