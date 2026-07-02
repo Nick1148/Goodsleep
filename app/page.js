@@ -42,6 +42,19 @@ const mergeDays = (prev, server, me) => {
 };
 const SNACKS = ["안 먹음", "조금", "보통", "많이"];
 const MOODS = ["😞", "😕", "😐", "🙂", "😄"];
+const DEFAULT_REWARDS = [
+  { emoji: "☕", title: "커피 사주기", cost: 40 },
+  { emoji: "🍰", title: "디저트 사주기", cost: 50 },
+  { emoji: "🧹", title: "설거지 면제권", cost: 50 },
+  { emoji: "💆", title: "어깨 마사지 15분", cost: 60 },
+  { emoji: "🍽️", title: "저녁 메뉴 결정권", cost: 120 },
+  { emoji: "🎬", title: "영화 데이트 준비하기", cost: 150 },
+  { emoji: "🍳", title: "원하는 요리 해주기", cost: 180 },
+  { emoji: "🎮", title: "주말 반나절 자유시간", cost: 200 },
+  { emoji: "🎁", title: "갖고 싶은 선물 하나", cost: 500 },
+  { emoji: "🌟", title: "뭐든 소원 하나 들어주기", cost: 550 },
+  { emoji: "✈️", title: "특별한 하루 데이트 코스", cost: 600 },
+];
 const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
 const GOALS_DATE = "__goals__";
 const POINTS = { full: 10, partial: 2, weekly: 15, monthly: 100, m30: 50, m100: 200, m365: 1000 };
@@ -116,6 +129,8 @@ export default function Page() {
   const [redeems, setRedeems] = useState([]);
   const [newReward, setNewReward] = useState({ emoji: "🎁", title: "", cost: "" });
   const [redeemMsg, setRedeemMsg] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [shopEdit, setShopEdit] = useState(false);
   const [initFilled, setInitFilled] = useState({});
   const saveTimers = useRef({});
 
@@ -257,6 +272,14 @@ export default function Page() {
       supabase.rpc("gs_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
       setNewReward({ emoji: "🎁", title: "", cost: "" });
     });
+  };
+  const seedDefaults = async () => {
+    for (const r of DEFAULT_REWARDS) {
+      await supabase.rpc("gs_catalog_add", { p_code: code, p_slot: me, p_title: r.title, p_emoji: r.emoji, p_cost: r.cost });
+    }
+    const { data } = await supabase.rpc("gs_catalog_get", { p_code: code });
+    if (data) setCatalog(data);
+    fireCelebrate("💝 추천 리워드가 담겼어요!");
   };
   const deleteReward = (id) => {
     supabase.rpc("gs_catalog_delete", { p_code: code, p_id: id }).then(() => {
@@ -404,6 +427,10 @@ export default function Page() {
   const balA = ledger.filter((r) => r.slot === "a").reduce((s, r) => s + r.delta, 0);
   const balB = ledger.filter((r) => r.slot === "b").reduce((s, r) => s + r.delta, 0);
   const myBal = me === "a" ? balA : balB;
+  const partner = me === "a" ? "b" : "a";
+  const sortedCat = [...catalog].sort((x, y) => x.cost - y.cost);
+  const nextGoal = sortedCat.find((c) => c.cost > myBal) || null;
+  const affordableCnt = sortedCat.filter((c) => c.cost <= myBal).length;
   const yEntry = days[addDays(date, -1)]?.[page];
   const yb = yEntry && yEntry.bed && yEntry.wake ? yEntry : null;
   const mins = sleepMinutes(e.bed, e.wake); const mood = sleepMood(mins);
@@ -672,72 +699,104 @@ export default function Page() {
         {view === "reward" && (<>
           <div className="td-mileherocard td-card">
             <div className="td-milerow">
-              <div className="td-milecol" style={{ "--mc": THEME.a.c1 }}>
-                <span className="td-mileemoji">{THEME.a.emoji}</span>
-                <span className="td-milename">{names.a}</span>
-                <span className="td-milenum">{balA}<i>p</i></span>
+              <div className="td-milecol" style={{ "--mc": THEME[me].c1 }}>
+                <span className="td-mileemoji">{THEME[me].emoji}</span>
+                <span className="td-milename">{names[me]} (나)</span>
+                <span className="td-milenum">{myBal}<i>p</i></span>
               </div>
               <div className="td-milediv">💞</div>
-              <div className="td-milecol" style={{ "--mc": THEME.b.c1 }}>
-                <span className="td-mileemoji">{THEME.b.emoji}</span>
-                <span className="td-milename">{names.b}</span>
-                <span className="td-milenum">{balB}<i>p</i></span>
+              <div className="td-milecol td-sub" style={{ "--mc": THEME[partner].c1 }}>
+                <span className="td-mileemoji">{THEME[partner].emoji}</span>
+                <span className="td-milename">{names[partner]}</span>
+                <span className="td-milenum">{me === "a" ? balB : balA}<i>p</i></span>
               </div>
             </div>
-            <p className="td-milesub">기록할수록 쌓여요 · 완전 기록 +{POINTS.full}p · 부분 기록 +{POINTS.partial}p</p>
+            {nextGoal ? (
+              <div className="td-milegoal">
+                <div className="td-milegoalbar"><div style={{ width: Math.min(100, Math.round((myBal / nextGoal.cost) * 100)) + "%" }} /></div>
+                <span>🎯 {nextGoal.emoji} <b>{nextGoal.title}</b>까지 {nextGoal.cost - myBal}p 남았어요</span>
+              </div>
+            ) : (sortedCat.length > 0 && <div className="td-milegoal"><span>✨ 지금 모든 리워드를 교환할 수 있어요!</span></div>)}
+            {affordableCnt > 0 && nextGoal && <p className="td-milesub">지금 바로 교환 가능한 리워드 {affordableCnt}개 🎉</p>}
           </div>
 
           {redeemMsg && <div className="td-pushmsg" onClick={() => setRedeemMsg("")}>{redeemMsg}</div>}
 
           {redeems.filter((r) => r.requester !== me && r.status === "pending").length > 0 && (
             <div className="td-card td-incoming">
-              <h3>🎫 {names[me === "a" ? "b" : "a"]}이(가) 보낸 요청</h3>
+              <h3 className="td-rewardh3">💌 {names[partner]}이(가) 보낸 요청</h3>
               {redeems.filter((r) => r.requester !== me && r.status === "pending").map((r) => (
                 <div key={r.id} className="td-ticket">
                   <span className="td-ticketicon">🎁</span>
-                  <div className="td-ticketbody"><b>{r.title}</b><small>{r.cost}p 사용</small></div>
-                  <button className="td-ticketbtn" onClick={() => confirmRedeem(r.id)}>완료했어요 ✓</button>
+                  <div className="td-ticketbody"><b>{r.title}</b><small>{r.cost}p 사용 · {(r.requested_at || "").slice(5, 10).replace("-", "/")}</small></div>
+                  <button className="td-ticketbtn" onClick={() => confirmRedeem(r.id)}>완료 ✓</button>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="td-card">
-            <h3 className="td-rewardh3">🛍️ 리워드 상점</h3>
-            {catalog.length === 0 && <p className="td-reviewempty">아직 등록된 리워드가 없어요. 아래에서 추가해봐요 🙂</p>}
-            {catalog.map((c) => (
-              <div key={c.id} className="td-rewarditem">
-                <span className="td-rewardemoji">{c.emoji}</span>
-                <div className="td-rewardbody"><b>{c.title}</b><small>{c.cost}p</small></div>
-                <button className="td-rewardbtn" disabled={myBal < c.cost} onClick={() => doRedeem(c)}>교환</button>
-                <button className="td-rewarddel" onClick={() => deleteReward(c.id)}>✕</button>
-              </div>
-            ))}
-            <div className="td-addreward">
-              <input className="td-emojiinput" maxLength={2} value={newReward.emoji} onChange={(ev) => setNewReward((s) => ({ ...s, emoji: ev.target.value }))} />
-              <input className="td-input td-addtitle" placeholder="리워드 이름 (예: 설거지 면제권)" value={newReward.title} onChange={(ev) => setNewReward((s) => ({ ...s, title: ev.target.value }))} />
-              <input className="td-input td-addcost" type="number" placeholder="가격" value={newReward.cost} onChange={(ev) => setNewReward((s) => ({ ...s, cost: ev.target.value }))} />
-              <button className="td-addbtn" onClick={addReward}>+ 추가</button>
+          <div className="td-card td-shopcard">
+            <div className="td-shophead">
+              <h3 className="td-rewardh3">🛍️ 리워드 상점</h3>
+              {sortedCat.length > 0 && <button className="td-editbtn" onClick={() => setShopEdit((v) => !v)}>{shopEdit ? "완료" : "편집"}</button>}
             </div>
+            {sortedCat.length === 0 && (
+              <div className="td-seedbox">
+                <span className="td-seedemoji">🎁</span>
+                <p>아직 리워드가 없어요!</p>
+                <button className="td-seedbtn" onClick={seedDefaults}>💝 추천 리워드 한번에 담기</button>
+              </div>
+            )}
+            <div className="td-rgrid">
+              {sortedCat.map((c) => {
+                const can = myBal >= c.cost;
+                const tier = c.cost < 100 ? " t1" : c.cost < 300 ? " t2" : " t3";
+                return (
+                  <div key={c.id} className={"td-rcard" + tier + (can ? "" : " locked")}>
+                    {shopEdit && <button className="td-rdel" onClick={() => deleteReward(c.id)}>✕</button>}
+                    <span className="td-remoji">{c.emoji}</span>
+                    <b className="td-rtitle">{c.title}</b>
+                    <span className="td-rprice">🪙 {c.cost}p</span>
+                    <button className={"td-rbtn" + (can ? "" : " lock")} disabled={!can || shopEdit} onClick={() => doRedeem(c)}>{can ? "교환하기" : `🔒 ${c.cost - myBal}p 더`}</button>
+                  </div>
+                );
+              })}
+            </div>
+            <button className="td-addtoggle" onClick={() => setShowAdd((v) => !v)}>{showAdd ? "닫기 ▴" : "＋ 나만의 리워드 추가"}</button>
+            {showAdd && (
+              <div className="td-addpanel">
+                <div className="td-emojirow">
+                  {["🎁", "☕", "🍰", "🎬", "💆", "🍳", "🧹", "🌟", "✈️", "🛍️", "🎮", "💐"].map((em) => (
+                    <button key={em} className={"td-emojichip" + (newReward.emoji === em ? " on" : "")} onClick={() => setNewReward((s) => ({ ...s, emoji: em }))}>{em}</button>
+                  ))}
+                </div>
+                <div className="td-addrow">
+                  <input className="td-input td-addtitle" placeholder="리워드 이름" value={newReward.title} onChange={(ev) => setNewReward((s) => ({ ...s, title: ev.target.value }))} />
+                  <input className="td-input td-addcost" type="number" placeholder="가격(p)" value={newReward.cost} onChange={(ev) => setNewReward((s) => ({ ...s, cost: ev.target.value }))} />
+                </div>
+                <button className="td-addbtn2" onClick={addReward}>추가하기</button>
+              </div>
+            )}
           </div>
 
           {redeems.filter((r) => r.requester === me).length > 0 && (
-            <div className="td-card">
+            <div className="td-card td-shopcard">
               <h3 className="td-rewardh3">📜 내가 보낸 요청</h3>
-              {redeems.filter((r) => r.requester === me).map((r) => (
+              {redeems.filter((r) => r.requester === me).slice(0, 6).map((r) => (
                 <div key={r.id} className={"td-ticket" + (r.status === "done" ? " done" : "")}>
                   <span className="td-ticketicon">{r.status === "done" ? "✅" : "⏳"}</span>
-                  <div className="td-ticketbody"><b>{r.title}</b><small>{r.cost}p · {r.status === "done" ? "완료됨" : "대기 중"}</small></div>
+                  <div className="td-ticketbody"><b>{r.title}</b><small>{r.cost}p · {r.status === "done" ? "완료됨 🎉" : "대기 중"}</small></div>
                 </div>
               ))}
             </div>
           )}
 
-          <div className="td-card">
+          <div className="td-card td-shopcard">
             <h3 className="td-rewardh3">🧾 나의 적립 내역</h3>
-            {ledger.filter((r) => r.slot === me).slice(0, 10).map((r) => (
+            {ledger.filter((r) => r.slot === me).slice(0, 8).map((r) => (
               <div key={r.id} className="td-ledgerrow">
-                <span>{LEDGER_LABEL[r.reason] || r.reason}</span>
+                <span className="td-ledgerdate">{(r.ref_date || "").slice(5).replace("-", "/")}</span>
+                <span className="td-ledgerlabel">{r.reason.startsWith("redeem_") ? "🎁 리워드 교환" : (LEDGER_LABEL[r.reason] || r.reason)}</span>
                 <b className={r.delta > 0 ? "plus" : "minus"}>{r.delta > 0 ? "+" : ""}{r.delta}p</b>
               </div>
             ))}
@@ -745,7 +804,7 @@ export default function Page() {
           </div>
         </>)}
 
-        <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
+                <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
 
       {celebrate && <div className="td-confetti" key={celebrate.key}>{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "var(--c1)" : "var(--c2)" }} />)}<div className="td-celebmsg">{celebrate.msg}</div></div>}
@@ -921,37 +980,66 @@ const css = `
 .td-maincard input:disabled,.td-maincard textarea:disabled,.td-times input:disabled,.td-goalrow input:disabled{ opacity:.95; }
 .td-toggle:disabled,.td-chip:disabled,.td-daychip:disabled{ cursor:default; }
 .td-milebadge{ display:flex; align-items:center; gap:4px; background:var(--card); border-radius:999px; padding:8px 13px; font-family:'Jua'; font-size:13px; color:var(--c2); box-shadow:0 3px 10px var(--shadow); cursor:pointer; }
-.td-mileherocard{ padding:18px; margin-bottom:12px; }
-.td-milerow{ display:flex; align-items:center; justify-content:center; gap:16px; }
-.td-milecol{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
-.td-mileemoji{ font-size:22px; }
-.td-milename{ font-family:'Jua'; font-size:13px; color:var(--muted); }
-.td-milenum{ font-family:'Jua'; font-size:26px; color:var(--mc); }
+.td-mileherocard{ padding:18px 16px 14px; margin-bottom:12px; }
+.td-milerow{ display:flex; align-items:center; justify-content:center; gap:10px; }
+.td-milecol{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; background:var(--soft2); border-radius:16px; padding:13px 8px; }
+.td-milecol.td-sub{ opacity:.88; }
+.td-mileemoji{ font-size:24px; }
+.td-milename{ font-family:'Jua'; font-size:12px; color:var(--muted); }
+.td-milenum{ font-family:'Jua'; font-size:28px; color:var(--mc); line-height:1.1; }
 .td-milenum i{ font-size:14px; font-style:normal; margin-left:2px; }
-.td-milediv{ font-size:20px; }
-.td-milesub{ text-align:center; font-size:11px; color:var(--muted); margin:12px 0 0; }
-.td-incoming h3, .td-rewardh3{ font-family:'Jua'; font-size:15px; margin:0 0 12px; color:var(--ink); }
+.td-milediv{ font-size:20px; flex:0 0 auto; }
+.td-milegoal{ margin-top:13px; }
+.td-milegoalbar{ height:10px; background:var(--soft); border-radius:999px; overflow:hidden; margin-bottom:7px; }
+.td-milegoalbar div{ height:100%; background:linear-gradient(90deg,var(--c1),var(--c2)); border-radius:999px; transition:width .5s; }
+.td-milegoal span{ display:block; text-align:center; font-size:12px; color:var(--muted); }
+.td-milegoal b{ color:var(--c2); font-family:'Jua'; }
+.td-milesub{ text-align:center; font-size:11px; color:var(--muted); margin:8px 0 0; font-family:'Jua'; }
+.td-rewardh3{ font-family:'Jua'; font-size:15px; margin:0 0 12px; color:var(--ink); }
+.td-incoming{ padding:16px; margin-bottom:12px; border:2px dashed var(--c1); }
+.td-shopcard{ padding:16px; margin-bottom:12px; }
+.td-shophead{ display:flex; align-items:center; justify-content:space-between; }
+.td-shophead .td-rewardh3{ margin:0; }
+.td-editbtn{ border:none; background:var(--soft2); color:var(--muted); font-family:'Jua'; font-size:12px; padding:6px 13px; border-radius:999px; cursor:pointer; }
+.td-seedbox{ text-align:center; padding:18px 0 10px; }
+.td-seedemoji{ font-size:42px; display:block; margin-bottom:6px; }
+.td-seedbox p{ color:var(--muted); font-size:13px; margin:0 0 12px; }
+.td-seedbtn{ border:none; background:linear-gradient(90deg,var(--c1),var(--c2)); color:#fff; font-family:'Jua'; font-size:14px; padding:12px 20px; border-radius:999px; cursor:pointer; box-shadow:0 4px 12px var(--shadow); }
+.td-rgrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+.td-rcard{ position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; border-radius:18px; padding:16px 10px 12px; text-align:center; box-shadow:0 3px 10px var(--shadow); color:#4A4038; }
+.td-rcard.t1{ background:linear-gradient(160deg,#EAF7EE,#D6EFDD); }
+.td-rcard.t2{ background:linear-gradient(160deg,#FFF3DC,#FFE6BD); }
+.td-rcard.t3{ background:linear-gradient(160deg,#FFE3EC,#F1D7FF); }
+.td-rcard.locked .td-remoji{ filter:grayscale(.55); opacity:.75; }
+.td-remoji{ font-size:34px; line-height:1; }
+.td-rtitle{ font-family:'Jua'; font-size:13px; line-height:1.25; min-height:33px; display:flex; align-items:center; justify-content:center; }
+.td-rprice{ font-family:'Jua'; font-size:12px; color:#8A7A66; background:rgba(255,255,255,.7); padding:3px 10px; border-radius:999px; }
+.td-rbtn{ width:100%; margin-top:5px; border:none; border-radius:11px; padding:9px 0; font-family:'Jua'; font-size:12px; color:#fff; cursor:pointer; }
+.t1 .td-rbtn{ background:#3DAE7B; } .t2 .td-rbtn{ background:#E0A23B; } .t3 .td-rbtn{ background:#E4568C; }
+.td-rbtn.lock{ background:rgba(255,255,255,.75); color:#9A8B7C; cursor:default; }
+.td-rbtn:active:not(.lock){ transform:scale(.97); }
+.td-rdel{ position:absolute; top:7px; right:7px; width:22px; height:22px; border:none; border-radius:50%; background:rgba(0,0,0,.4); color:#fff; font-size:11px; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2; }
+.td-addtoggle{ width:100%; margin-top:12px; padding:11px; border:2px dashed var(--soft); border-radius:13px; background:transparent; color:var(--c2); font-family:'Jua'; font-size:13px; cursor:pointer; }
+.td-addpanel{ margin-top:10px; background:var(--soft2); border-radius:14px; padding:12px; }
+.td-emojirow{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.td-emojichip{ width:37px; height:37px; border:2px solid transparent; border-radius:10px; background:var(--field); font-size:17px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; }
+.td-emojichip.on{ border-color:var(--c1); background:var(--card); }
+.td-addrow{ display:flex; gap:7px; }
+.td-addrow .td-addtitle{ flex:2; margin-top:0; }
+.td-addrow .td-addcost{ flex:1; margin-top:0; }
+.td-addbtn2{ width:100%; margin-top:9px; border:none; background:var(--c2); color:#fff; font-family:'Jua'; font-size:14px; padding:11px; border-radius:12px; cursor:pointer; }
 .td-ticket{ display:flex; align-items:center; gap:10px; background:var(--soft2); border-radius:14px; padding:11px 13px; margin-bottom:8px; }
 .td-ticket:last-child{ margin-bottom:0; }
-.td-ticket.done{ opacity:.6; }
-.td-ticketicon{ font-size:20px; }
+.td-ticket.done{ opacity:.55; }
+.td-ticketicon{ font-size:22px; padding-right:10px; border-right:2px dashed var(--line); }
 .td-ticketbody{ flex:1; display:flex; flex-direction:column; }
-.td-ticketbody b{ font-family:'Jua'; font-size:14px; } .td-ticketbody small{ font-size:11px; color:var(--muted); }
-.td-ticketbtn{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:12px; padding:8px 12px; border-radius:999px; cursor:pointer; }
-.td-rewarditem{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
-.td-rewarditem:last-of-type{ border-bottom:none; }
-.td-rewardemoji{ font-size:22px; }
-.td-rewardbody{ flex:1; display:flex; flex-direction:column; }
-.td-rewardbody b{ font-family:'Jua'; font-size:14px; } .td-rewardbody small{ font-size:11px; color:var(--muted); }
-.td-rewardbtn{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:12px; padding:8px 14px; border-radius:999px; cursor:pointer; }
-.td-rewardbtn:disabled{ background:var(--soft); color:var(--muted); cursor:default; }
-.td-rewarddel{ border:none; background:none; color:var(--muted); font-size:14px; cursor:pointer; padding:4px; }
-.td-addreward{ display:flex; gap:6px; margin-top:12px; align-items:center; }
-.td-emojiinput{ width:40px; text-align:center; border:2px solid var(--soft); border-radius:10px; padding:9px 4px; font-size:16px; background:var(--field); }
-.td-addtitle{ margin-top:0; flex:2; } .td-addcost{ margin-top:0; flex:1; }
-.td-addbtn{ border:none; background:var(--c2); color:#fff; font-family:'Jua'; font-size:13px; padding:9px 12px; border-radius:11px; cursor:pointer; white-space:nowrap; }
-.td-ledgerrow{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink); }
+.td-ticketbody b{ font-family:'Jua'; font-size:14px; color:var(--ink); }
+.td-ticketbody small{ font-size:11px; color:var(--muted); margin-top:1px; }
+.td-ticketbtn{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:12px; padding:9px 13px; border-radius:999px; cursor:pointer; }
+.td-ledgerrow{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink); }
 .td-ledgerrow:last-of-type{ border-bottom:none; }
+.td-ledgerdate{ font-size:11px; color:var(--muted); width:40px; flex:0 0 auto; font-family:'Jua'; }
+.td-ledgerlabel{ flex:1; }
 .td-ledgerrow .plus{ color:#3DAE7B; font-family:'Jua'; } .td-ledgerrow .minus{ color:#DC6B57; font-family:'Jua'; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
