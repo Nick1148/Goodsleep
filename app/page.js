@@ -53,7 +53,7 @@ const DEFAULT_REWARDS = [
   { emoji: "🎮", title: "주말 반나절 자유시간", cost: 200 },
   { emoji: "🎁", title: "갖고 싶은 선물 하나", cost: 500 },
   { emoji: "🌟", title: "뭐든 소원 하나 들어주기", cost: 550 },
-  { emoji: "✈️", title: "특별한 하루 데이트 코스", cost: 600 },
+  { emoji: "✈️", title: "특별한 하루 데이트 코스", cost: 700 },
 ];
 const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
 const GOALS_DATE = "__goals__";
@@ -261,6 +261,8 @@ export default function Page() {
   };
   const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
+  const autoGrow = (ev) => { const el = ev.target; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
+  const autoGrowRef = (el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } };
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
   const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
@@ -573,9 +575,9 @@ export default function Page() {
                   <div className="td-mealrow"><span>🌙 저녁</span><input className="td-input td-mealinput" placeholder="저녁에 뭐 먹었어?" value={e.meals.dinner} disabled={!mine} onChange={(ev) => updateMeal(page, "dinner", ev.target.value)} /></div>
                 </>) }] : []),
               { k: "grat", label: "⭐ 오늘의 3감사", cls: " td-gratblock", labelCls: " td-gratlabel", filled: (e.gratitude || []).some((x) => (x || "").trim()), sum: (e.gratitude || []).filter((x) => (x || "").trim()).length ? (e.gratitude || []).filter((x) => (x || "").trim()).length + "개 작성" : "미기록",
-                body: (<>{[0, 1, 2].map((i) => (<input key={i} className="td-input td-gratinput" placeholder={`${i + 1}. 감사한 일`} value={e.gratitude[i]} disabled={!mine} onChange={(ev) => { const gg = [...e.gratitude]; gg[i] = ev.target.value; updateEntry(page, { gratitude: gg }); }} />))}</>) },
+                body: (<>{[0, 1, 2].map((i) => (<textarea key={i} className="td-input td-gratinput td-autogrow" rows={1} placeholder={`${i + 1}. 감사한 일`} value={e.gratitude[i]} disabled={!mine} ref={autoGrowRef} onInput={autoGrow} onChange={(ev) => { const gg = [...e.gratitude]; gg[i] = ev.target.value; updateEntry(page, { gratitude: gg }); }} />))}</>) },
               { k: "refl", label: "📓 한 줄 후기", filled: !!(e.reflection || "").trim(), sum: (e.reflection || "").trim() ? ((e.reflection || "").length > 22 ? (e.reflection || "").slice(0, 22) + "…" : e.reflection) : "미기록",
-                body: (<textarea className="td-area" rows={2} placeholder="오늘 하루는 어땠어?" value={e.reflection} disabled={!mine} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />) },
+                body: (<textarea className="td-area td-autogrow" rows={2} placeholder="오늘 하루는 어땠어?" value={e.reflection} disabled={!mine} ref={autoGrowRef} onInput={autoGrow} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />) },
             ].map((b) => {
               const open = openSet[b.k] != null ? openSet[b.k] : (mine ? !initFilled[b.k] : false);
               return (
@@ -1041,6 +1043,7 @@ const css = `
 .td-ledgerdate{ font-size:11px; color:var(--muted); width:40px; flex:0 0 auto; font-family:'Jua'; }
 .td-ledgerlabel{ flex:1; }
 .td-ledgerrow .plus{ color:#3DAE7B; font-family:'Jua'; } .td-ledgerrow .minus{ color:#DC6B57; font-family:'Jua'; }
+.td-autogrow{ resize:none; overflow:hidden; min-height:44px; line-height:1.45; white-space:pre-wrap; word-break:break-word; font-family:'Gowun Dodum'; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
