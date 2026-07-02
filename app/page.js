@@ -58,6 +58,25 @@ const DEFAULT_REWARDS = [
 const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
 const GOALS_DATE = "__goals__";
 const POINTS = { full: 10, partial: 2, weekly: 15, monthly: 100, m30: 50, m100: 200, m365: 1000 };
+const dayOfYear = (dk) => { const [y, m, d] = dk.split("-").map(Number); return Math.floor((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 0)) / 86400000); };
+const QUOTES = {
+  a: {
+    tired: ["잘 못 잔 밤도 몸은 기억하고 있어. 오늘은 무리하지 않아도 괜찮아.", "피곤함은 약점이 아니라 신호야. 오늘은 그 신호를 따라가봐.", "쉬어가는 것도 나아가는 방법 중 하나야.", "느린 아침이라고 나쁜 하루는 아니야.", "몸이 무거운 날엔, 마음이라도 가볍게 두자."],
+    rested: ["잘 잔 아침은 그 자체로 하루의 절반을 이긴 거야.", "충전된 오늘, 무엇이든 시도해볼 만해.", "좋은 잠은 최고의 전략이었어.", "맑은 정신으로 시작하는 하루, 반갑다.", "오늘의 컨디션을 오늘 안에 다 쓸 필요는 없어. 천천히 써도 돼."],
+    exercise: ["몸을 움직이는 건 마음을 정돈하는 일이기도 해.", "오늘은 몸에게 안부를 물어볼 차례야.", "작은 움직임이 큰 변화를 만든다는 걸, 넌 이미 알고 있잖아.", "땀 한 방울이 오늘의 생각을 더 또렷하게 해줄 거야.", "운동은 미래의 나에게 보내는 선물이야."],
+    monday: ["한 주의 시작은 완벽할 필요 없어. 그냥 시작하면 돼.", "월요일의 무게는 누구에게나 있어. 너만 그런 게 아니야.", "새로운 7일, 어제와 다르게 살아볼 이유는 충분해.", "천천히 켜지는 엔진도 결국 잘 달려.", "이번 주도, 너답게."],
+    weekend: ["주말엔 아무것도 안 해도 잘하고 있는 거야.", "쉼도 계획의 일부야.", "오늘은 시간에 쫓기지 않아도 되는 날.", "여백이 있어야 다음 문장을 쓸 수 있어.", "느긋함도 재능이야."],
+    general: ["오늘 하루도, 있는 그대로 잘 지내보자.", "완벽한 하루보다, 솔직한 하루가 낫다.", "작게 쌓인 것들이 결국 단단한 걸 만들어.", "지금 이 순간에 집중하는 것만으로도 충분해.", "오늘의 나에게 조금 너그러워지자."],
+  },
+  b: {
+    tired: ["어젯밤 잠이 부족했지? 오늘은 나한테 조금 기대도 돼 🤍", "피곤한 날엔 커피 한 잔이 우리 편이야 ☕", "무리하지 말고, 딱 할 수 있는 만큼만 하자!", "졸린 눈도 예뻐. 오늘 하루도 잘 부탁해 🌙", "잠이 부족해도, 넌 오늘도 충분히 잘하고 있어."],
+    rested: ["잘 잤다니 완전 다행이야! 오늘 컨디션 최고겠다 ✨", "상쾌한 아침이네! 오늘 하루도 반짝반짝하자 🌟", "푹 잔 너, 오늘 뭘 해도 잘될 것 같아!", "좋은 잠은 좋은 하루의 시작! 오늘도 화이팅 💪", "컨디션 좋은 너를 보니까 나도 기분 좋다 😊"],
+    exercise: ["오늘은 몸 움직이는 날! 살살 몸 풀어보자 🏃‍♀️", "운동하고 나면 기분이 뿅 좋아질 거야!", "오늘의 운동, 내가 옆에서 응원할게 📣", "땀 흘리고 난 뒤의 개운함, 기대해도 좋아!", "몸도 마음도 튼튼하게, 오늘도 화이팅!"],
+    monday: ["월요일이지만 우리 씩씩하게 가보자! 🐣", "새로운 한 주, 좋은 일만 가득하길!", "월요병엔 애정이 특효약이래 (내가 방금 만든 말) 💕", "이번 주도 우리 잘 해낼 수 있어!", "월요일도 네 편이 있다는 거, 잊지 마 🤍"],
+    weekend: ["주말이다! 오늘은 마음껏 게을러도 괜찮아 🛋️", "느긋한 하루 보내, 나도 같이 뒹굴거릴게 😌", "주말엔 뭐 하고 놀까, 생각만 해도 신나!", "푹 쉬는 것도 오늘의 할 일이야!", "주말 햇살처럼 나른하고 좋은 하루 보내 ☀️"],
+    general: ["오늘 하루도 네가 있어서 든든해 🤍", "좋은 아침! 오늘도 예쁜 하루 보내자 🌸", "매일 조금씩 애쓰는 너, 진짜 멋져!", "오늘도 너의 하루를 응원할게!", "작은 일에도 웃을 수 있는 하루 되길!"],
+  },
+};
 const weekMonday = (dk) => { const [y, m, d] = dk.split("-").map(Number); const dt = new Date(y, m - 1, d); const dow = (dt.getDay() + 6) % 7; return ymd(new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() - dow)); };
 const monthFirst = (dk) => dk.slice(0, 7) + "-01";
 const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [], name: "" });
@@ -381,6 +400,21 @@ export default function Page() {
     weekArr.forEach((dk) => { if (dk > today()) return; const d = days[dk] || {}; cheersTotal += (d.a?.cheers || 0) + (d.b?.cheers || 0); if (hasEntry(d.a) && hasEntry(d.b)) bothDays++; });
     return { cheersTotal, bothDays };
   };
+  // 아침 문구: 오늘 상황(운동일/전날 수면/요일)에 맞춰 카테고리 결정
+  const quoteCategory = (slot) => {
+    const gg = goals[slot] || defaultGoal();
+    const dowMon = (new Date().getDay() + 6) % 7; // 0=월 ... 6=일
+    if ((gg.exerciseDays || []).includes(dowMon)) return "exercise";
+    const y = days[addDays(today(), -1)]?.[slot];
+    const m = y ? sleepMinutes(y.bed, y.wake) : null;
+    if (m != null) {
+      if (m < gg.sleepHours * 60 - 30) return "tired";
+      if (m >= gg.sleepHours * 60 - 15) return "rested";
+    }
+    if (dowMon === 0) return "monday";
+    if (dowMon >= 5) return "weekend";
+    return "general";
+  };
   // 월간 리포트: 특정 연/월의 지표 (durs, exDays, spread 등)
   const monthMetrics = (slot, year, month) => {
     const dim = new Date(year, month, 0).getDate();
@@ -425,6 +459,8 @@ export default function Page() {
 
   const t = THEME[page]; const g = goals[page]; const e = getEntry(page);
   const names = { a: (goals.a && goals.a.name) || THEME.a.name, b: (goals.b && goals.b.name) || THEME.b.name };
+  const myCat = quoteCategory(me);
+  const myQuote = QUOTES[me][myCat][dayOfYear(today()) % QUOTES[me][myCat].length];
   const mine = page === me;
   const balA = ledger.filter((r) => r.slot === "a").reduce((s, r) => s + r.delta, 0);
   const balB = ledger.filter((r) => r.slot === "b").reduce((s, r) => s + r.delta, 0);
@@ -495,6 +531,10 @@ export default function Page() {
           </div>
         </div>
         {pushMsg && <div className="td-pushmsg" onClick={() => setPushMsg("")}>{pushMsg}</div>}
+        <div className="td-quotecard">
+          <span className="td-quoteicon">{me === "a" ? "🕊️" : "🤍"}</span>
+          <p className="td-quotetext">{myQuote}</p>
+        </div>
 
         {view !== "reward" && (
           <div className="td-tabs td-glasscard">
@@ -846,6 +886,9 @@ const css = `
 .td-loginbtn{ width:100%; margin-top:8px; padding:14px; border:none; border-radius:14px; background:var(--c1); color:#fff; font-family:'Jua'; font-size:17px; cursor:pointer; }
 .td-loginhint{ display:block; margin-top:12px; color:var(--muted); font-size:12px; }
 
+.td-quotecard{ display:flex; align-items:flex-start; gap:9px; background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border:1px solid var(--line); border-radius:16px; padding:12px 14px; margin-bottom:12px; }
+.td-quoteicon{ font-size:16px; flex:0 0 auto; margin-top:1px; }
+.td-quotetext{ margin:0; font-size:13px; line-height:1.5; color:var(--ink); }
 .td-tabs{ display:flex; gap:6px; margin-bottom:12px; padding:6px; border-radius:18px; }
 .td-tab{ flex:1; min-width:0; border:none; background:transparent; color:var(--ink); font-family:'Jua'; font-size:14px; padding:10px 6px; border-radius:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; opacity:.6; transition:.2s; }
 .td-tab span{ font-size:15px; } .td-tab.on{ background:var(--tc); color:#fff; opacity:1; box-shadow:0 4px 12px var(--shadow); }
