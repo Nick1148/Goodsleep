@@ -20,6 +20,20 @@ async function rpc(fn, body) {
   return txt ? JSON.parse(txt) : null;
 }
 
+async function sendRedemptionPushes() {
+  const rows = await rpc("gs_redeem_unnotified", { p_secret: BACKUP_SECRET });
+  if (!rows || !rows.length) return;
+  const subs = await rpc("gs_push_targets", { p_secret: BACKUP_SECRET });
+  for (const req of rows) {
+    const partnerSlot = req.requester === "a" ? "b" : "a";
+    const target = (subs || []).find((s) => s.couple_code === req.couple_code && s.slot === partnerSlot);
+    if (target) {
+      await send(target, { title: "우리의 하루", body: `🎁 ${req.title} 요청이 도착했어요!`, tag: "redeem" });
+    }
+    await rpc("gs_redeem_mark_notified", { p_secret: BACKUP_SECRET, p_id: req.id });
+  }
+}
+
 async function send(row, msg) {
   try {
     await webpush.sendNotification(
@@ -71,4 +85,5 @@ async function send(row, msg) {
     }
   }
   console.log(`done. sent=${sent}, subscribers=${rows.length}`);
+  await sendRedemptionPushes();
 })().catch((e) => { console.error(e); process.exit(1); });
