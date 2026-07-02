@@ -42,7 +42,11 @@ const mergeDays = (prev, server, me) => {
 };
 const SNACKS = ["안 먹음", "조금", "보통", "많이"];
 const MOODS = ["😞", "😕", "😐", "🙂", "😄"];
+const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
 const GOALS_DATE = "__goals__";
+const POINTS = { full: 10, partial: 2, weekly: 15, monthly: 100, m30: 50, m100: 200, m365: 1000 };
+const weekMonday = (dk) => { const [y, m, d] = dk.split("-").map(Number); const dt = new Date(y, m - 1, d); const dow = (dt.getDay() + 6) % 7; return ymd(new Date(dt.getFullYear(), dt.getMonth(), dt.getDate() - dow)); };
+const monthFirst = (dk) => dk.slice(0, 7) + "-01";
 const defaultGoal = () => ({ bedtime: "23:30", wake: "07:00", sleepHours: 7.5, exerciseWeekly: 4, exerciseDays: [], name: "" });
 const VAPID_PUBLIC = "BOi2fKS_xvYbfB75PT7GWfxlY5H_bmxWA-1ySlFSRtCSKutpAB0Ux_MmuUUcp1WCqcxdQofsNv10K1mgvt34RwI";
 const urlB64ToUint8 = (b64) => { const pad = "=".repeat((4 - (b64.length % 4)) % 4); const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/"); const raw = atob(s); return Uint8Array.from([...raw].map((c) => c.charCodeAt(0))); };
@@ -107,6 +111,11 @@ export default function Page() {
   const [pushMsg, setPushMsg] = useState("");
   const [savedFlash, setSavedFlash] = useState(null);
   const [openSet, setOpenSet] = useState({});
+  const [ledger, setLedger] = useState([]);
+  const [catalog, setCatalog] = useState([]);
+  const [redeems, setRedeems] = useState([]);
+  const [newReward, setNewReward] = useState({ emoji: "🎁", title: "", cost: "" });
+  const [redeemMsg, setRedeemMsg] = useState("");
   const [initFilled, setInitFilled] = useState({});
   const saveTimers = useRef({});
 
@@ -153,11 +162,51 @@ export default function Page() {
       const { nd, ng } = parseRows(rows);
       if (initial) { setDays(nd); setGoals(ng); setLoading(false); }
       else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
+      const [{ data: mrows }, { data: crows }, { data: rrows }] = await Promise.all([
+        supabase.rpc("gs_mileage_get", { p_code: code }),
+        supabase.rpc("gs_catalog_get", { p_code: code }),
+        supabase.rpc("gs_redeem_get", { p_code: code }),
+      ]);
+      if (!alive) return;
+      if (mrows) setLedger(mrows);
+      if (crows) setCatalog(crows);
+      if (rrows) setRedeems(rrows);
     };
     setLoading(true); load(true);
     const iv = setInterval(() => load(false), 10000);
     return () => { alive = false; clearInterval(iv); };
   }, [code, me]);
+
+  // 마일리지 자동 적립 체크 (내 기록 기준, 중복 적립은 DB에서 방지)
+  useEffect(() => {
+    if (!code || loading || !me) return;
+    const en = days[today()]?.[me];
+    if (isCompleteEntry(me, en)) award(me, POINTS.full, "daily", today());
+    else if (hasEntry(en)) award(me, POINTS.partial, "daily", today());
+
+    if (new Date().getDay() === 0) {
+      const wk = weekDates(today());
+      const m = metricsFor(me, wk);
+      if (regLabel(m.spread).dots === 5) award(me, POINTS.weekly, "weekly_sleepreg", weekMonday(today()));
+      if (m.exDays >= (goals[me]?.exerciseWeekly || 4)) award(me, POINTS.weekly, "weekly_exercise", weekMonday(today()));
+    }
+    const tmr = addDays(today(), 1);
+    if (tmr.slice(0, 7) !== today().slice(0, 7)) {
+      const mf = monthFirst(today());
+      const mm = monthMetrics(me, Number(today().slice(0, 4)), Number(today().slice(5, 7)));
+      const daysElapsed = Number(today().slice(8, 10));
+      const rate = daysElapsed > 0 ? mm.logged / daysElapsed : 0;
+      const weeks = new Set(); let c = monthFirst(today());
+      while (c.slice(0, 7) === today().slice(0, 7)) { weeks.add(weekMonday(c)); c = addDays(c, 1); }
+      const allWeeksMet = [...weeks].every((wm) => ledger.some((r) => r.slot === me && r.reason === "weekly_sleepreg" && r.ref_date === wm) && ledger.some((r) => r.slot === me && r.reason === "weekly_exercise" && r.ref_date === wm));
+      if (rate >= 0.9 && allWeeksMet) award(me, POINTS.monthly, "monthly_bonus", mf);
+    }
+    const streak = streakFor(me);
+    const SENTINEL = "2000-01-01";
+    if (streak >= 30) award(me, POINTS.m30, "milestone_30", SENTINEL);
+    if (streak >= 100) award(me, POINTS.m100, "milestone_100", SENTINEL);
+    if (streak >= 365) award(me, POINTS.m365, "milestone_365", SENTINEL);
+  }, [code, loading, days, me]);
 
   // 날짜/사람 변경 시: 이미 채워진 항목은 접힌 상태로 시작
   useEffect(() => {
@@ -183,11 +232,50 @@ export default function Page() {
     saveTimers.current[k] = setTimeout(() => { supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => {}); }, 600);
   };
   const updateEntry = (slot, patch) => { if (slot !== me) return; setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; }); };
+  const award = (slot, delta, reason, refDate) => {
+    supabase.rpc("gs_mileage_award", { p_code: code, p_slot: slot, p_delta: delta, p_reason: reason, p_ref_date: refDate }).then(() => {
+      supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+    });
+  };
+  const isCompleteEntry = (slot, en) => {
+    if (!en) return false;
+    const base = en.bed && en.wake && en.snack >= 0 && (en.mood || 0) > 0 && (en.gratitude || []).some((x) => (x || "").trim()) && (en.reflection || "").trim();
+    if (!base) return false;
+    if (slot === "b") return !!(en.meals && (en.meals.breakfast || en.meals.lunch || en.meals.dinner));
+    return true;
+  };
   const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
   const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
+
+  const addReward = () => {
+    const title = newReward.title.trim(); const cost = parseInt(newReward.cost, 10);
+    if (!title || !cost || cost <= 0) { setRedeemMsg("이름과 가격을 입력해줘요."); return; }
+    supabase.rpc("gs_catalog_add", { p_code: code, p_slot: me, p_title: title, p_emoji: newReward.emoji || "🎁", p_cost: cost }).then(() => {
+      supabase.rpc("gs_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
+      setNewReward({ emoji: "🎁", title: "", cost: "" });
+    });
+  };
+  const deleteReward = (id) => {
+    supabase.rpc("gs_catalog_delete", { p_code: code, p_id: id }).then(() => {
+      supabase.rpc("gs_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
+    });
+  };
+  const doRedeem = (item) => {
+    supabase.rpc("gs_redeem", { p_code: code, p_slot: me, p_catalog_id: item.id }).then(({ data: ok }) => {
+      if (ok) {
+        fireCelebrate(`${item.emoji} ${item.title} 교환 완료!`);
+        Promise.all([supabase.rpc("gs_mileage_get", { p_code: code }), supabase.rpc("gs_redeem_get", { p_code: code })]).then(([m, r]) => { if (m.data) setLedger(m.data); if (r.data) setRedeems(r.data); });
+      } else setRedeemMsg("마일리지가 부족해요 🥲");
+    });
+  };
+  const confirmRedeem = (id) => {
+    supabase.rpc("gs_redeem_confirm", { p_code: code, p_id: id }).then(() => {
+      supabase.rpc("gs_redeem_get", { p_code: code }).then(({ data }) => { if (data) setRedeems(data); });
+    });
+  };
 
   const togglePush = async () => {
     setPushMsg("");
@@ -313,6 +401,9 @@ export default function Page() {
   const t = THEME[page]; const g = goals[page]; const e = getEntry(page);
   const names = { a: (goals.a && goals.a.name) || THEME.a.name, b: (goals.b && goals.b.name) || THEME.b.name };
   const mine = page === me;
+  const balA = ledger.filter((r) => r.slot === "a").reduce((s, r) => s + r.delta, 0);
+  const balB = ledger.filter((r) => r.slot === "b").reduce((s, r) => s + r.delta, 0);
+  const myBal = me === "a" ? balA : balB;
   const yEntry = days[addDays(date, -1)]?.[page];
   const yb = yEntry && yEntry.bed && yEntry.wake ? yEntry : null;
   const mins = sleepMinutes(e.bed, e.wake); const mood = sleepMood(mins);
@@ -369,15 +460,18 @@ export default function Page() {
         <div className="td-topbar">
           <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}</span>
           <div className="td-topbtns">
+            <span className="td-milebadge" onClick={() => setView("reward")}>🪙 {myBal}</span>
             <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
             <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
           </div>
         </div>
         {pushMsg && <div className="td-pushmsg" onClick={() => setPushMsg("")}>{pushMsg}</div>}
 
-        <div className="td-tabs td-glasscard">
-          {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}><span>{THEME[p].emoji}</span>{names[p]}{p === me ? " (나)" : ""}</button>))}
-        </div>
+        {view !== "reward" && (
+          <div className="td-tabs td-glasscard">
+            {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}><span>{THEME[p].emoji}</span>{names[p]}{p === me ? " (나)" : ""}</button>))}
+          </div>
+        )}
 
         {view === "today" && (<>
           {!mine && <div className="td-viewonly">👀 {names[page]}의 하루 · 응원볼만 보낼 수 있어요</div>}
@@ -575,13 +669,89 @@ export default function Page() {
           </div>
         )}
 
+        {view === "reward" && (<>
+          <div className="td-mileherocard td-card">
+            <div className="td-milerow">
+              <div className="td-milecol" style={{ "--mc": THEME.a.c1 }}>
+                <span className="td-mileemoji">{THEME.a.emoji}</span>
+                <span className="td-milename">{names.a}</span>
+                <span className="td-milenum">{balA}<i>p</i></span>
+              </div>
+              <div className="td-milediv">💞</div>
+              <div className="td-milecol" style={{ "--mc": THEME.b.c1 }}>
+                <span className="td-mileemoji">{THEME.b.emoji}</span>
+                <span className="td-milename">{names.b}</span>
+                <span className="td-milenum">{balB}<i>p</i></span>
+              </div>
+            </div>
+            <p className="td-milesub">기록할수록 쌓여요 · 완전 기록 +{POINTS.full}p · 부분 기록 +{POINTS.partial}p</p>
+          </div>
+
+          {redeemMsg && <div className="td-pushmsg" onClick={() => setRedeemMsg("")}>{redeemMsg}</div>}
+
+          {redeems.filter((r) => r.requester !== me && r.status === "pending").length > 0 && (
+            <div className="td-card td-incoming">
+              <h3>🎫 {names[me === "a" ? "b" : "a"]}이(가) 보낸 요청</h3>
+              {redeems.filter((r) => r.requester !== me && r.status === "pending").map((r) => (
+                <div key={r.id} className="td-ticket">
+                  <span className="td-ticketicon">🎁</span>
+                  <div className="td-ticketbody"><b>{r.title}</b><small>{r.cost}p 사용</small></div>
+                  <button className="td-ticketbtn" onClick={() => confirmRedeem(r.id)}>완료했어요 ✓</button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="td-card">
+            <h3 className="td-rewardh3">🛍️ 리워드 상점</h3>
+            {catalog.length === 0 && <p className="td-reviewempty">아직 등록된 리워드가 없어요. 아래에서 추가해봐요 🙂</p>}
+            {catalog.map((c) => (
+              <div key={c.id} className="td-rewarditem">
+                <span className="td-rewardemoji">{c.emoji}</span>
+                <div className="td-rewardbody"><b>{c.title}</b><small>{c.cost}p</small></div>
+                <button className="td-rewardbtn" disabled={myBal < c.cost} onClick={() => doRedeem(c)}>교환</button>
+                <button className="td-rewarddel" onClick={() => deleteReward(c.id)}>✕</button>
+              </div>
+            ))}
+            <div className="td-addreward">
+              <input className="td-emojiinput" maxLength={2} value={newReward.emoji} onChange={(ev) => setNewReward((s) => ({ ...s, emoji: ev.target.value }))} />
+              <input className="td-input td-addtitle" placeholder="리워드 이름 (예: 설거지 면제권)" value={newReward.title} onChange={(ev) => setNewReward((s) => ({ ...s, title: ev.target.value }))} />
+              <input className="td-input td-addcost" type="number" placeholder="가격" value={newReward.cost} onChange={(ev) => setNewReward((s) => ({ ...s, cost: ev.target.value }))} />
+              <button className="td-addbtn" onClick={addReward}>+ 추가</button>
+            </div>
+          </div>
+
+          {redeems.filter((r) => r.requester === me).length > 0 && (
+            <div className="td-card">
+              <h3 className="td-rewardh3">📜 내가 보낸 요청</h3>
+              {redeems.filter((r) => r.requester === me).map((r) => (
+                <div key={r.id} className={"td-ticket" + (r.status === "done" ? " done" : "")}>
+                  <span className="td-ticketicon">{r.status === "done" ? "✅" : "⏳"}</span>
+                  <div className="td-ticketbody"><b>{r.title}</b><small>{r.cost}p · {r.status === "done" ? "완료됨" : "대기 중"}</small></div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="td-card">
+            <h3 className="td-rewardh3">🧾 나의 적립 내역</h3>
+            {ledger.filter((r) => r.slot === me).slice(0, 10).map((r) => (
+              <div key={r.id} className="td-ledgerrow">
+                <span>{LEDGER_LABEL[r.reason] || r.reason}</span>
+                <b className={r.delta > 0 ? "plus" : "minus"}>{r.delta > 0 ? "+" : ""}{r.delta}p</b>
+              </div>
+            ))}
+            {ledger.filter((r) => r.slot === me).length === 0 && <p className="td-reviewempty">아직 적립 내역이 없어요.</p>}
+          </div>
+        </>)}
+
         <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
 
       {celebrate && <div className="td-confetti" key={celebrate.key}>{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "var(--c1)" : "var(--c2)" }} />)}<div className="td-celebmsg">{celebrate.msg}</div></div>}
 
       <nav className="td-bottomnav td-glasscard">
-        {[["today", "📝", "오늘"], ["review", "📊", "리뷰"], ["calendar", "🗓️", "캘린더"]].map(([v, ic, lb]) => (
+        {[["today", "📝", "오늘"], ["review", "📊", "리뷰"], ["calendar", "🗓️", "캘린더"], ["reward", "🎁", "리워드"]].map(([v, ic, lb]) => (
           <button key={v} className={"td-navbtn" + (view === v ? " on" : "")} onClick={() => setView(v)}><span>{ic}</span>{lb}</button>
         ))}
       </nav>
@@ -750,6 +920,39 @@ const css = `
 .td-bbody{ margin-top:9px; }
 .td-maincard input:disabled,.td-maincard textarea:disabled,.td-times input:disabled,.td-goalrow input:disabled{ opacity:.95; }
 .td-toggle:disabled,.td-chip:disabled,.td-daychip:disabled{ cursor:default; }
+.td-milebadge{ display:flex; align-items:center; gap:4px; background:var(--card); border-radius:999px; padding:8px 13px; font-family:'Jua'; font-size:13px; color:var(--c2); box-shadow:0 3px 10px var(--shadow); cursor:pointer; }
+.td-mileherocard{ padding:18px; margin-bottom:12px; }
+.td-milerow{ display:flex; align-items:center; justify-content:center; gap:16px; }
+.td-milecol{ flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; }
+.td-mileemoji{ font-size:22px; }
+.td-milename{ font-family:'Jua'; font-size:13px; color:var(--muted); }
+.td-milenum{ font-family:'Jua'; font-size:26px; color:var(--mc); }
+.td-milenum i{ font-size:14px; font-style:normal; margin-left:2px; }
+.td-milediv{ font-size:20px; }
+.td-milesub{ text-align:center; font-size:11px; color:var(--muted); margin:12px 0 0; }
+.td-incoming h3, .td-rewardh3{ font-family:'Jua'; font-size:15px; margin:0 0 12px; color:var(--ink); }
+.td-ticket{ display:flex; align-items:center; gap:10px; background:var(--soft2); border-radius:14px; padding:11px 13px; margin-bottom:8px; }
+.td-ticket:last-child{ margin-bottom:0; }
+.td-ticket.done{ opacity:.6; }
+.td-ticketicon{ font-size:20px; }
+.td-ticketbody{ flex:1; display:flex; flex-direction:column; }
+.td-ticketbody b{ font-family:'Jua'; font-size:14px; } .td-ticketbody small{ font-size:11px; color:var(--muted); }
+.td-ticketbtn{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:12px; padding:8px 12px; border-radius:999px; cursor:pointer; }
+.td-rewarditem{ display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
+.td-rewarditem:last-of-type{ border-bottom:none; }
+.td-rewardemoji{ font-size:22px; }
+.td-rewardbody{ flex:1; display:flex; flex-direction:column; }
+.td-rewardbody b{ font-family:'Jua'; font-size:14px; } .td-rewardbody small{ font-size:11px; color:var(--muted); }
+.td-rewardbtn{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:12px; padding:8px 14px; border-radius:999px; cursor:pointer; }
+.td-rewardbtn:disabled{ background:var(--soft); color:var(--muted); cursor:default; }
+.td-rewarddel{ border:none; background:none; color:var(--muted); font-size:14px; cursor:pointer; padding:4px; }
+.td-addreward{ display:flex; gap:6px; margin-top:12px; align-items:center; }
+.td-emojiinput{ width:40px; text-align:center; border:2px solid var(--soft); border-radius:10px; padding:9px 4px; font-size:16px; background:var(--field); }
+.td-addtitle{ margin-top:0; flex:2; } .td-addcost{ margin-top:0; flex:1; }
+.td-addbtn{ border:none; background:var(--c2); color:#fff; font-family:'Jua'; font-size:13px; padding:9px 12px; border-radius:11px; cursor:pointer; white-space:nowrap; }
+.td-ledgerrow{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--line); font-size:13px; color:var(--ink); }
+.td-ledgerrow:last-of-type{ border-bottom:none; }
+.td-ledgerrow .plus{ color:#3DAE7B; font-family:'Jua'; } .td-ledgerrow .minus{ color:#DC6B57; font-family:'Jua'; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
