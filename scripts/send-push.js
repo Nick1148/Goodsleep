@@ -59,6 +59,20 @@ async function sendRedemptionPushes() {
   }
 }
 
+async function sendMessagePushes() {
+  const rows = await rpc("gs_msgs_unnotified", { p_secret: BACKUP_SECRET });
+  if (!rows || !rows.length) return;
+  const subs = await rpc("gs_push_targets", { p_secret: BACKUP_SECRET });
+  for (const m of rows) {
+    const target = (subs || []).find((s) => s.couple_code === m.couple_code && s.slot === m.to_slot);
+    if (target) {
+      const body = m.kind === "letter" ? "💌 숨겨둔 쪽지가 도착했어요! 열어보세요" : `💝 ${m.message} 선물이 도착했어요!`;
+      await send(target, { title: "우리의 하루", body, tag: m.kind });
+    }
+    await rpc("gs_msg_mark_notified", { p_secret: BACKUP_SECRET, p_id: m.id });
+  }
+}
+
 async function send(row, msg) {
   try {
     await webpush.sendNotification(
@@ -151,4 +165,5 @@ function quoteFor(slot, localDate, dowMon, days, goals) {
   }
   console.log(`done. sent=${sent}, subscribers=${rows.length}`);
   await sendRedemptionPushes();
+  await sendMessagePushes();
 })().catch((e) => { console.error(e); process.exit(1); });
