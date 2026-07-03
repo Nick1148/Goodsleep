@@ -98,25 +98,46 @@ const themeVars = (t, night) => {
     "--glass": "rgba(255,255,255,.62)", "--shadow": "rgba(120,90,60,.14)",
   };
   return {
-    ...base, "--pageBg": "#171526", "--glowc": t.glowD, "--card": "#232135", "--field": "#2c2a40",
+    ...base, "--pageBg": "#141221", "--glowc": t.glowD, "--card": "#252239", "--field": "#2c2a40",
     "--soft": "#3a3752", "--soft2": "#1f1d30", "--grat": "#2a2740", "--gratline": "#403a5e", "--grattxt": "#E7C46B",
-    "--ink": "#ECE6DE", "--muted": "#9a94a8", "--line": "rgba(255,255,255,.08)", "--good": "rgba(110,190,140,.14)",
-    "--glass": "rgba(30,28,46,.55)", "--shadow": "rgba(0,0,0,.4)",
+    "--ink": "#ECE6DE", "--muted": "#A6A0BC", "--line": "rgba(255,255,255,.10)", "--good": "rgba(110,190,140,.14)",
+    "--glass": "rgba(34,31,54,.66)", "--shadow": "rgba(0,0,0,.4)",
   };
 };
 
-function FireBuddy({ sleepy }) {
+function FireBuddy({ mood }) {
+  const m = mood || "happy";
   return (
     <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">
       <path d="M40 6c6 12 2 16 8 22 4-2 6-7 5-12 9 9 14 20 14 30 0 16-12 28-27 28S13 62 13 46c0-11 7-21 16-28-1 6 1 11 5 13 4-7-1-13 6-25z" fill="#FF7043" />
       <path d="M40 30c4 6 2 9 5 13 2-1 3-4 3-7 5 6 8 12 8 18 0 9-7 16-16 16s-16-7-16-16c0-6 4-12 9-16-1 4 1 7 3 8 2-4-1-8 4-16z" fill="#FFCA28" />
-      {sleepy ? (<path d="M29 52q4 4 8 0M43 52q4 4 8 0" stroke="#3a2a20" strokeWidth="2.4" fill="none" strokeLinecap="round" />)
-        : (<><circle cx="33" cy="52" r="4.2" fill="#3a2a20" /><circle cx="47" cy="52" r="4.2" fill="#3a2a20" /><circle cx="34.2" cy="50.6" r="1.4" fill="#fff" /><circle cx="48.2" cy="50.6" r="1.4" fill="#fff" /></>)}
-      <ellipse cx="27" cy="58" rx="3.4" ry="2" fill="#FF8A65" opacity=".7" /><ellipse cx="53" cy="58" rx="3.4" ry="2" fill="#FF8A65" opacity=".7" />
-      <path d={sleepy ? "M38 59h4" : "M37 58q3 3 6 0"} stroke="#3a2a20" strokeWidth="2" fill="none" strokeLinecap="round" />
+      {m === "sleepy" && <path d="M29 52q4 4 8 0M43 52q4 4 8 0" stroke="#3a2a20" strokeWidth="2.4" fill="none" strokeLinecap="round" />}
+      {m === "celebrate" && <path d="M29 53q4 -6 8 0M43 53q4 -6 8 0" stroke="#3a2a20" strokeWidth="2.8" fill="none" strokeLinecap="round" />}
+      {m === "curious" && (<><circle cx="33" cy="52" r="4.6" fill="#3a2a20" /><circle cx="47" cy="52" r="4.6" fill="#3a2a20" /><circle cx="34.5" cy="50.3" r="1.7" fill="#fff" /><circle cx="48.5" cy="50.3" r="1.7" fill="#fff" /></>)}
+      {m === "happy" && (<><circle cx="33" cy="52" r="4.2" fill="#3a2a20" /><circle cx="47" cy="52" r="4.2" fill="#3a2a20" /><circle cx="34.2" cy="50.6" r="1.4" fill="#fff" /><circle cx="48.2" cy="50.6" r="1.4" fill="#fff" /></>)}
+      <ellipse cx="27" cy="58" rx="3.4" ry="2" fill="#FF8A65" opacity={m === "celebrate" ? ".95" : ".7"} />
+      <ellipse cx="53" cy="58" rx="3.4" ry="2" fill="#FF8A65" opacity={m === "celebrate" ? ".95" : ".7"} />
+      {m === "sleepy" && <path d="M38 59h4" stroke="#3a2a20" strokeWidth="2" fill="none" strokeLinecap="round" />}
+      {m === "celebrate" && <path d="M35 57q5 6.5 10 0" stroke="#3a2a20" strokeWidth="2.4" fill="none" strokeLinecap="round" />}
+      {m === "curious" && <circle cx="40" cy="59" r="2.6" fill="none" stroke="#3a2a20" strokeWidth="2" />}
+      {m === "happy" && <path d="M37 58q3 3 6 0" stroke="#3a2a20" strokeWidth="2" fill="none" strokeLinecap="round" />}
     </svg>
   );
 }
+function CountUp({ value, format }) {
+  const [disp, setDisp] = useState(value);
+  const prevRef = useRef(value);
+  useEffect(() => {
+    const from = prevRef.current, to = value; prevRef.current = to;
+    if (from === to) { setDisp(to); return; }
+    const t0 = performance.now(), dur = 650; let raf;
+    const step = (t) => { const p = Math.min(1, (t - t0) / dur); const ease = 1 - Math.pow(1 - p, 3); setDisp(Math.round(from + (to - from) * ease)); if (p < 1) raf = requestAnimationFrame(step); };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{format ? format(disp) : disp}</>;
+}
+const relTime = (ts) => { const s = (Date.now() - new Date(ts).getTime()) / 1000; if (s < 120) return "방금 전"; if (s < 3600) return `${Math.floor(s / 60)}분 전`; if (s < 86400) return `${Math.floor(s / 3600)}시간 전`; return `${Math.floor(s / 86400)}일 전`; };
 function FairyBuddy() { return <img src="/seal.jpg" alt="지인" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />; }
 
 const LS_CODE = "couple-code", LS_ME = "couple-me", LS_NIGHT = "couple-night";
@@ -143,6 +164,8 @@ export default function Page() {
   const [pushMsg, setPushMsg] = useState("");
   const [savedFlash, setSavedFlash] = useState(null);
   const [openSet, setOpenSet] = useState({});
+  const [lastSeen, setLastSeen] = useState({ a: null, b: null });
+  const [bigCeleb, setBigCeleb] = useState(null);
   const [ledger, setLedger] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [redeems, setRedeems] = useState([]);
@@ -182,20 +205,24 @@ export default function Page() {
     if (!code) return;
     let alive = true;
     const parseRows = (rows) => {
-      const nd = {}, ng = { a: defaultGoal(), b: defaultGoal() };
+      const nd = {}, ng = { a: defaultGoal(), b: defaultGoal() }; const ls = { a: null, b: null };
       (rows || []).forEach((r) => {
         if (r.date === GOALS_DATE) ng[r.slot] = { ...defaultGoal(), ...(r.data || {}) };
-        else { nd[r.date] = nd[r.date] || {}; nd[r.date][r.slot] = entryFromRow(r); }
+        else {
+          nd[r.date] = nd[r.date] || {}; nd[r.date][r.slot] = entryFromRow(r);
+          if (r.updated_at && (!ls[r.slot] || r.updated_at > ls[r.slot])) ls[r.slot] = r.updated_at;
+        }
       });
-      return { nd, ng };
+      return { nd, ng, ls };
     };
     const load = async (initial) => {
       const { data: rows, error } = await supabase.rpc("gs_get", { p_code: code });
       if (!alive) return;
       if (error) { if (initial) setLoading(false); return; }
-      const { nd, ng } = parseRows(rows);
+      const { nd, ng, ls } = parseRows(rows);
       if (initial) { setDays(nd); setGoals(ng); setLoading(false); }
       else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
+      setLastSeen(ls);
       const [{ data: mrows }, { data: crows }, { data: rrows }] = await Promise.all([
         supabase.rpc("gs_mileage_get", { p_code: code }),
         supabase.rpc("gs_catalog_get", { p_code: code }),
@@ -256,6 +283,35 @@ export default function Page() {
     });
   }, [date, page, loading]);
 
+  // 랜드마크 축하 (마일스톤/월간개근) — 기기당 1회, 풀스크린
+  useEffect(() => {
+    if (!code || !me || !ledger.length) return;
+    const LM = { milestone_30: ["30일 연속 기록! 🔥", "한 달을 함께 해냈어요"], milestone_100: ["100일 연속 기록! 🌟", "백 일의 꾸준함, 대단해요"], milestone_365: ["365일 연속 기록! 👑", "1년을 함께 했어요"], monthly_bonus: ["월간 개근 달성! 🏅", "이번 달, 거의 완벽했어요"] };
+    for (const r of ledger) {
+      if (r.slot !== me) continue;
+      const lm = LM[r.reason]; if (!lm) continue;
+      const k = `gs-celebrated:${r.reason}:${r.ref_date}`;
+      try {
+        if (!localStorage.getItem(k)) {
+          localStorage.setItem(k, "1");
+          setBigCeleb({ key: Date.now(), title: lm[0], sub: lm[1] });
+          try { navigator.vibrate && navigator.vibrate([80, 40, 120]); } catch (e2) {}
+          break;
+        }
+      } catch (e1) {}
+    }
+  }, [ledger, code, me]);
+
+  // 오늘 기록 완성 — 하루 1회 소소한 축하
+  useEffect(() => {
+    if (!code || loading) return;
+    const en = days[today()]?.[me];
+    if (!isCompleteEntry(me, en)) return;
+    const k = `gs-daydone:${today()}`;
+    try { if (localStorage.getItem(k)) return; localStorage.setItem(k, "1"); } catch (e1) { return; }
+    fireCelebrate("오늘 기록 완성! ✨");
+  }, [days, code, loading, me]);
+
   const login = () => { const c = codeInput.trim().toLowerCase(); if (!c) return; try { localStorage.setItem(LS_CODE, c); localStorage.setItem(LS_ME, meInput); } catch (e) {} setCode(c); setMe(meInput); setPage(meInput); };
   const logout = () => { try { localStorage.removeItem(LS_CODE); localStorage.removeItem(LS_ME); } catch (e) {} setCode(null); setDays({}); setCodeInput(""); };
 
@@ -310,7 +366,9 @@ export default function Page() {
   const doRedeem = (item) => {
     supabase.rpc("gs_redeem", { p_code: code, p_slot: me, p_catalog_id: item.id }).then(({ data: ok }) => {
       if (ok) {
-        fireCelebrate(`${item.emoji} ${item.title} 교환 완료!`);
+        const isFirst = redeems.filter((r) => r.requester === me).length === 0;
+        if (isFirst) { setBigCeleb({ key: Date.now(), title: "첫 리워드 교환! 🎁", sub: `${item.title} — 곧 만나요` }); try { navigator.vibrate && navigator.vibrate([80, 40, 120]); } catch (e2) {} }
+        else fireCelebrate(`${item.emoji} ${item.title} 교환 완료!`);
         Promise.all([supabase.rpc("gs_mileage_get", { p_code: code }), supabase.rpc("gs_redeem_get", { p_code: code })]).then(([m, r]) => { if (m.data) setLedger(m.data); if (r.data) setRedeems(r.data); });
       } else setRedeemMsg("마일리지가 부족해요 🥲");
     });
@@ -442,7 +500,7 @@ export default function Page() {
       <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
         <style>{css}</style>
         <div className="td-login">
-          <div className="td-loginbuddy td-breathe"><FireBuddy sleepy={false} /></div>
+          <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
           <h1>우리의 하루</h1>
           <p>둘만의 공유 코드를 입력하면 같은 기록을 함께 봐요.</p>
           <input className="td-input" placeholder="공유 코드 (예: tessa-jiin-93f2k)" value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && login()} />
@@ -487,6 +545,19 @@ export default function Page() {
   const lastMonthD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
   const lastMonth = monthMetrics(page, lastMonthD.getFullYear(), lastMonthD.getMonth() + 1);
   const monthRegLabel = regLabel(thisMonth.spread);
+  const ringItems = [!!(e.bed && e.wake), e.snack >= 0, (e.mood || 0) > 0, (e.gratitude || []).some((x) => (x || "").trim()), !!(e.reflection || "").trim(), ...(page === "b" ? [!!(e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner))] : [])];
+  const ringDone = ringItems.filter(Boolean).length; const ringTotal = ringItems.length;
+  const viewedComplete = isCompleteEntry(page, e);
+  const buddyMood = viewedComplete ? "celebrate" : (mins == null ? "curious" : (mood.sleepy ? "sleepy" : "happy"));
+  const headline = (() => {
+    if (cur.nSleep === 0 && cur.logged === 0) return null;
+    if (reg.dots >= 4 && cur.exDays >= g.exerciseWeekly) return "잠도 운동도, 완벽에 가까운 한 주예요 ✨";
+    if (reg.dots >= 4) return "꽤 규칙적으로 잠든 한 주였어요 ✨";
+    if (prev.avg && cur.avg && cur.avg > prev.avg + 15) return "지난주보다 잠이 좋아지고 있어요 🌱";
+    if (cur.exDays >= g.exerciseWeekly) return "운동 목표를 채운 멋진 한 주! 💪";
+    if (cur.logged >= 5) return "꾸준히 기록한 한 주였어요 👏";
+    return "이번 주도 차곡차곡 쌓는 중이에요 🙂";
+  })();
   const streak = streakFor(page);
   const lvl = streak >= 14 ? 3 : streak >= 7 ? 2 : streak >= 3 ? 1 : 0;
 
@@ -525,7 +596,7 @@ export default function Page() {
         <div className="td-topbar">
           <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}</span>
           <div className="td-topbtns">
-            <span className="td-milebadge" onClick={() => setView("reward")}>🪙 {myBal}</span>
+            <span className="td-milebadge" onClick={() => setView("reward")}>🪙 <CountUp value={myBal} /></span>
             <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
             <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
           </div>
@@ -543,7 +614,7 @@ export default function Page() {
         )}
 
         {view === "today" && (<>
-          {!mine && <div className="td-viewonly">👀 {names[page]}의 하루 · 응원볼만 보낼 수 있어요</div>}
+          {!mine && <div className="td-viewonly">👀 {names[page]}의 하루 · 응원볼만 보낼 수 있어요{lastSeen[page] && <span className="td-presence">🕐 {relTime(lastSeen[page])}에 기록했어요 💭</span>}</div>}
           <div className="td-datenav">
             <button onClick={() => setDate(addDays(date, -1))} aria-label="이전">‹</button>
             <div className="td-date"><b>{md}</b><small>{dow}요일{isToday ? " · 오늘" : ""}</small>{!isToday && <button className="td-gototoday" onClick={() => setDate(today())}>오늘로 ↩</button>}</div>
@@ -551,9 +622,14 @@ export default function Page() {
           </div>
 
           <div className="td-hero td-card">
+            <svg className="td-ring" viewBox="0 0 46 46" aria-hidden="true">
+              <circle cx="23" cy="23" r="18" fill="none" stroke="var(--soft)" strokeWidth="5" />
+              <circle cx="23" cy="23" r="18" fill="none" stroke="var(--c1)" strokeWidth="5" strokeLinecap="round" strokeDasharray={2 * Math.PI * 18} strokeDashoffset={2 * Math.PI * 18 * (1 - ringDone / Math.max(1, ringTotal))} transform="rotate(-90 23 23)" style={{ transition: "stroke-dashoffset .6s" }} />
+              <text x="23" y="27" textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="Jua">{ringDone}/{ringTotal}</text>
+            </svg>
             <div className="td-buddywrap">
-              <div className={"td-buddy td-breathe lvl" + lvl}>
-                {page === "a" ? <FireBuddy sleepy={mood.sleepy} /> : <FairyBuddy />}
+              <div className={"td-buddy td-breathe lvl" + lvl + (viewedComplete ? " done" : "")}>
+                {page === "a" ? <FireBuddy mood={buddyMood} /> : <FairyBuddy />}
                 {lvl > 0 && <span className="td-spark s1">✨</span>}
                 {lvl > 1 && <span className="td-spark s2">✨</span>}
                 {lvl > 2 && <span className="td-spark s3">⭐</span>}
@@ -565,7 +641,7 @@ export default function Page() {
             {bedNudge && <div className="td-nudge">{bedNudge}</div>}
 
             <div className="td-sleepcard">
-              <div className="td-sleephead"><span>😴 오늘 수면</span><b>{fmtSleep(mins)}</b></div>
+              <div className="td-sleephead"><span>😴 오늘 수면</span><b className="td-bigsleep">{mins != null ? <CountUp value={mins} format={fmtSleep} /> : "—"}</b></div>
               <div className="td-times">
                 <label><i>🌙 잘 때</i><input type="time" value={e.bed} disabled={!mine} onChange={(ev) => updateEntry(page, { bed: ev.target.value })} /></label>
                 <label><i>☀️ 일어난 때</i><input type="time" value={e.wake} disabled={!mine} onChange={(ev) => updateEntry(page, { wake: ev.target.value })} /></label>
@@ -573,24 +649,25 @@ export default function Page() {
               {mine && yb && (!e.bed || !e.wake) && <button className="td-yesterday" onClick={() => updateEntry(page, { bed: yb.bed, wake: yb.wake })}>↩ 어제와 같게 ({yb.bed} → {yb.wake})</button>}
               <div className="td-charge"><div className="td-chargefill" style={{ width: charge + "%" }}><span className="td-shimmer" /></div></div>
               <div className="td-moodmsg">{mood.emoji} {mood.msg}</div>
-              <div className="td-reg">
-                <span>취침 규칙성(이번 주)</span>
-                <span className="td-regdots">{[1, 2, 3, 4, 5].map((i) => <i key={i} style={{ background: i <= reg.dots ? reg.c : "var(--soft)" }} />)}</span>
-                <b style={{ color: reg.c }}>{reg.txt}</b>
-              </div>
-              <div className="td-debt">🧾 최근 14일 수면 빚 <b style={{ color: sdColor }}>{sd.debt === 0 ? (sd.n > 0 ? "없음! 🎉" : "—") : fmtSleep(sd.debt)}</b></div>
               <div className="td-goalhint">🎯 목표 취침 {g.bedtime} · 기상 {g.wake} · {g.sleepHours}시간</div>
             </div>
           </div>
 
-          <div className="td-progress">
-            <div className="td-progitem td-card">
-              <div className="td-proglabel">😴 수면 규칙성</div>
+          <div className="td-statstrip td-card">
+            <div className="td-stat">
+              <span>😴 규칙성</span>
               <div className="td-progdots">{[1, 2, 3, 4, 5].map((i) => <i key={i} style={{ background: i <= reg.dots ? reg.c : "var(--soft)" }} />)}</div>
+              <b style={{ color: reg.c }}>{reg.txt}</b>
             </div>
-            <div className="td-progitem td-card">
-              <div className="td-proglabel">💪 이번 주 운동 {cur.exDays}/{g.exerciseWeekly}</div>
+            <div className="td-stat">
+              <span>🧾 수면 빚</span>
+              <b style={{ color: sdColor, fontSize: 15 }}>{sd.debt === 0 ? (sd.n > 0 ? "없음 🎉" : "—") : fmtSleep(sd.debt)}</b>
+              <b style={{ color: "var(--muted)", fontSize: 10 }}>최근 14일</b>
+            </div>
+            <div className="td-stat">
+              <span>💪 운동</span>
               <div className="td-progbar"><div className="td-progfill" style={{ width: exPct + "%" }} /></div>
+              <b>{cur.exDays}/{g.exerciseWeekly}회</b>
             </div>
           </div>
 
@@ -666,6 +743,7 @@ export default function Page() {
         {view === "review" && (<>
           <div className="td-review td-card">
             <h3>📊 {names[page]} 이번 주 리뷰</h3>
+            {headline && !fb.empty && <p className="td-headline">{headline}</p>}
             {fb.empty ? (<p className="td-reviewempty">이번 주 기록을 채우면 리뷰가 나와요 🙂</p>) : (<>
               {fb.good.length > 0 && <div className="td-fbgood">👏 잘한 점: {fb.good.join(" · ")}</div>}
               <div className="td-reviewgrid">
@@ -744,13 +822,13 @@ export default function Page() {
               <div className="td-milecol" style={{ "--mc": THEME[me].c1 }}>
                 <span className="td-mileemoji">{THEME[me].emoji}</span>
                 <span className="td-milename">{names[me]} (나)</span>
-                <span className="td-milenum">{myBal}<i>p</i></span>
+                <span className="td-milenum"><CountUp value={myBal} /><i>p</i></span>
               </div>
               <div className="td-milediv">💞</div>
               <div className="td-milecol td-sub" style={{ "--mc": THEME[partner].c1 }}>
                 <span className="td-mileemoji">{THEME[partner].emoji}</span>
                 <span className="td-milename">{names[partner]}</span>
-                <span className="td-milenum">{me === "a" ? balB : balA}<i>p</i></span>
+                <span className="td-milenum"><CountUp value={me === "a" ? balB : balA} /><i>p</i></span>
               </div>
             </div>
             {nextGoal ? (
@@ -849,6 +927,16 @@ export default function Page() {
                 <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
 
+      {bigCeleb && (
+        <div className="td-bigceleb" key={bigCeleb.key} onClick={() => setBigCeleb(null)}>
+          <div className="td-bigrays" />
+          <div className="td-bigbuddy">{me === "a" ? <FireBuddy mood="celebrate" /> : <FairyBuddy />}</div>
+          <h2>{bigCeleb.title}</h2>
+          <p>{bigCeleb.sub}</p>
+          <span className="td-bigclose">화면을 탭하면 닫혀요</span>
+          <div className="td-confetti">{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "#FFD980" : "#FF9EC1" }} />)}</div>
+        </div>
+      )}
       {celebrate && <div className="td-confetti" key={celebrate.key}>{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "var(--c1)" : "var(--c2)" }} />)}<div className="td-celebmsg">{celebrate.msg}</div></div>}
 
       <nav className="td-bottomnav td-glasscard">
@@ -1087,6 +1175,28 @@ const css = `
 .td-ledgerlabel{ flex:1; }
 .td-ledgerrow .plus{ color:#3DAE7B; font-family:'Jua'; } .td-ledgerrow .minus{ color:#DC6B57; font-family:'Jua'; }
 .td-autogrow{ resize:none; overflow:hidden; min-height:44px; line-height:1.45; white-space:pre-wrap; word-break:break-word; font-family:'Gowun Dodum'; }
+.td-hero{ position:relative; }
+.td-ring{ position:absolute; top:14px; right:14px; width:46px; height:46px; }
+.td-bigsleep{ font-size:27px !important; font-variant-numeric:tabular-nums; }
+.td-statstrip{ display:flex; gap:6px; padding:13px 10px; margin-bottom:12px; }
+.td-stat{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; }
+.td-stat > span{ font-size:11px; color:var(--muted); font-family:'Jua'; }
+.td-stat b{ font-family:'Jua'; font-size:12px; color:var(--ink); text-align:center; }
+.td-stat .td-progdots{ width:100%; max-width:72px; }
+.td-stat .td-progbar{ width:100%; max-width:72px; }
+.td-headline{ font-family:'Jua'; font-size:17px; line-height:1.45; color:var(--ink); margin:0 0 12px; }
+.td-presence{ display:block; font-size:11px; color:var(--muted); margin-top:3px; }
+.td-milebadge,.td-milenum{ font-variant-numeric:tabular-nums; }
+.td-buddy.done{ box-shadow:0 0 0 3px #FFE08A, 0 0 24px var(--c1); }
+.td-week{ margin-bottom:12px; }
+.td-bigceleb{ position:fixed; inset:0; z-index:60; background:rgba(18,14,28,.6); -webkit-backdrop-filter:blur(9px); backdrop-filter:blur(9px); display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; animation:fadein .35s ease; overflow:hidden; }
+.td-bigrays{ position:absolute; width:360px; height:360px; border-radius:50%; background:repeating-conic-gradient(rgba(255,224,138,.16) 0 14deg, transparent 14deg 28deg); animation:spinslow 16s linear infinite; }
+.td-bigbuddy{ position:relative; z-index:1; width:132px; height:132px; border-radius:50%; background:var(--sky); padding:14px; overflow:hidden; box-shadow:0 0 0 5px rgba(255,255,255,.35), 0 12px 44px rgba(0,0,0,.4); animation:pop .5s ease; }
+.td-bigceleb h2{ position:relative; z-index:1; font-family:'Jua'; color:#fff; font-size:24px; margin:16px 0 4px; text-align:center; padding:0 20px; }
+.td-bigceleb p{ position:relative; z-index:1; color:rgba(255,255,255,.85); font-size:14px; margin:0; text-align:center; padding:0 20px; }
+.td-bigclose{ position:relative; z-index:1; margin-top:18px; color:rgba(255,255,255,.55); font-size:12px; }
+@keyframes spinslow{ to{ transform:rotate(360deg); } }
+@keyframes fadein{ from{ opacity:0; } to{ opacity:1; } }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
