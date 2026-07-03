@@ -55,6 +55,29 @@ const DEFAULT_REWARDS = [
   { emoji: "🌟", title: "뭐든 소원 하나 들어주기", cost: 550 },
   { emoji: "✈️", title: "특별한 하루 데이트 코스", cost: 700 },
 ];
+const COUPLE_Q = [
+  "오늘 상대의 어떤 점이 제일 고마웠어?", "최근 상대가 나를 웃게 한 순간은?", "요즘 상대에게 가장 해주고 싶은 건?", "상대의 어떤 표정을 제일 좋아해?", "우리 둘만의 추억 중 가장 아끼는 건?",
+  "다음 데이트로 가고 싶은 곳은?", "상대에게 배우고 싶은 점은?", "오늘 하루 중 상대와 나누고 싶은 순간은?", "상대의 어떤 말이 힘이 됐어?", "우리가 처음 만난 날 기억나는 장면은?",
+  "요즘 상대가 제일 열심히 하는 것 같은 건?", "상대에게 미안했던 작은 일이 있다면?", "함께 도전해보고 싶은 새로운 것은?", "상대의 어떤 습관이 귀여워?", "오늘 상대를 한 단어로 표현하면?",
+  "같이 먹고 싶은 음식은?", "상대와 함께라서 달라진 내 모습은?", "10년 뒤 우리는 어떤 모습일까?", "상대에게 지금 바로 문자 보낸다면 뭐라고?", "상대의 어떤 점을 닮고 싶어?",
+  "요즘 상대가 힘들어 보이는 부분은?", "우리 사이 별명을 새로 짓는다면?", "상대와 가장 편안한 순간은 언제야?", "오늘 상대에게 고백하고 싶은 사소한 진심은?", "함께 보고 싶은 영화나 드라마는?",
+  "상대가 만든 요리 중 최고는?", "우리가 함께 이겨낸 일이 있다면?", "상대의 웃음소리를 들으면 드는 생각은?", "주말에 같이 하고 싶은 게으른 일은?", "상대에게 가장 고마운 최근의 배려는?",
+  "상대와 여행 간다면 어디로?", "상대의 어떤 노력을 알아주고 싶어?", "지금 상대가 옆에 있다면 하고 싶은 말은?", "우리만 아는 웃긴 순간은?", "상대에게서 가장 안정감을 느낄 때는?",
+  "함께 만들어가고 싶은 우리의 규칙은?", "상대의 어떤 취향을 응원해?", "오늘 상대 덕분에 나아진 기분이 있다면?", "서로에게 첫인상은 어땠을까?", "상대와 오래 하고 싶은 약속 하나는?",
+];
+const CHEER_PRESETS = ["오늘도 고생했어 🤍", "잘 자, 내 꿈 꿔 🌙", "네가 최고야 ✨", "보고 싶다 🥰", "오늘 하루도 예뻤어", "푹 쉬어, 사랑해 💗", "늘 응원해 📣", "고마워, 늘 🌸"];
+const HATS = [
+  { id: "", label: "없음", e: "" }, { id: "ribbon", label: "리본", e: "🎀" }, { id: "crown", label: "왕관", e: "👑" },
+  { id: "flower", label: "꽃", e: "🌸" }, { id: "cap", label: "모자", e: "🧢" }, { id: "santa", label: "산타", e: "🎅" },
+  { id: "star", label: "별", e: "⭐" }, { id: "halo", label: "천사", e: "😇" }, { id: "party", label: "파티", e: "🎉" },
+];
+const AURAS = [
+  { id: "", label: "없음" }, { id: "hearts", label: "하트", e: "💗" }, { id: "sparkle", label: "반짝", e: "✨" },
+  { id: "petals", label: "꽃잎", e: "🌸" }, { id: "stars", label: "별빛", e: "⭐" }, { id: "bubbles", label: "방울", e: "🫧" },
+];
+const FRAMES = [
+  { id: "", label: "기본" }, { id: "gold", label: "골드" }, { id: "rainbow", label: "무지개" }, { id: "neon", label: "네온" }, { id: "dashed", label: "점선" },
+];
 const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
 const GOALS_DATE = "__goals__";
 const POINTS = { full: 10, partial: 2, weekly: 15, monthly: 100, m30: 50, m100: 200, m365: 1000 };
@@ -140,6 +163,25 @@ function CountUp({ value, format }) {
 const relTime = (ts) => { const s = (Date.now() - new Date(ts).getTime()) / 1000; if (s < 120) return "방금 전"; if (s < 3600) return `${Math.floor(s / 60)}분 전`; if (s < 86400) return `${Math.floor(s / 3600)}시간 전`; return `${Math.floor(s / 86400)}일 전`; };
 function FairyBuddy() { return <img src="/seal.jpg" alt="지인" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />; }
 
+function AvatarDeco({ avatar, children, big }) {
+  const av = avatar || {};
+  const hat = HATS.find((h) => h.id === av.hat && h.id);
+  const aura = AURAS.find((a) => a.id === av.aura && a.id);
+  const N = big ? 8 : 6;
+  return (
+    <div className={"td-avatar frame-" + (av.frame || "none") + (big ? " big" : "")}>
+      {aura && (
+        <div className="td-aura">
+          {[...Array(N)].map((_, i) => (
+            <span key={i} style={{ "--i": i, "--n": N, "--dl": (i * 0.4) + "s" }}>{aura.e}</span>
+          ))}
+        </div>
+      )}
+      <div className="td-avatarinner">{children}</div>
+      {hat && <span className="td-hat">{hat.e}</span>}
+    </div>
+  );
+}
 const LS_CODE = "couple-code", LS_ME = "couple-me", LS_NIGHT = "couple-night";
 
 export default function Page() {
@@ -166,6 +208,14 @@ export default function Page() {
   const [openSet, setOpenSet] = useState({});
   const [lastSeen, setLastSeen] = useState({ a: null, b: null });
   const [bigCeleb, setBigCeleb] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [answers, setAnswers] = useState([]);
+  const [qInput, setQInput] = useState("");
+  const [cheerText, setCheerText] = useState("");
+  const [showCheerBox, setShowCheerBox] = useState(false);
+  const [letterInput, setLetterInput] = useState({ msg: "", date: "" });
+  const [giftInput, setGiftInput] = useState("");
+  const [openLetter, setOpenLetter] = useState(null);
   const [ledger, setLedger] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [redeems, setRedeems] = useState([]);
@@ -223,15 +273,19 @@ export default function Page() {
       if (initial) { setDays(nd); setGoals(ng); setLoading(false); }
       else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
       setLastSeen(ls);
-      const [{ data: mrows }, { data: crows }, { data: rrows }] = await Promise.all([
+      const [{ data: mrows }, { data: crows }, { data: rrows }, { data: msgs }, { data: ans }] = await Promise.all([
         supabase.rpc("gs_mileage_get", { p_code: code }),
         supabase.rpc("gs_catalog_get", { p_code: code }),
         supabase.rpc("gs_redeem_get", { p_code: code }),
+        supabase.rpc("gs_msg_get", { p_code: code, p_me: me }),
+        supabase.rpc("gs_qa_get", { p_code: code, p_me: me }),
       ]);
       if (!alive) return;
       if (mrows) setLedger(mrows);
       if (crows) setCatalog(crows);
       if (rrows) setRedeems(rrows);
+      if (msgs) setMessages(msgs);
+      if (ans) setAnswers(ans);
     };
     setLoading(true); load(true);
     const iv = setInterval(() => load(false), 10000);
@@ -341,6 +395,35 @@ export default function Page() {
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
   const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
+  const reloadSocial = () => {
+    supabase.rpc("gs_msg_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setMessages(data); });
+    supabase.rpc("gs_qa_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setAnswers(data); });
+  };
+  const sendCheerMsg = (slot, text) => {
+    setBurstKey((k) => k + 1);
+    supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: (getEntry(slot).cheers || 0) + 1 }).then(() => {});
+    setDays((prev) => { const day = { ...(prev[date] || {}) }; const en = { ...(day[slot] || blankEntry()) }; en.cheers = (en.cheers || 0) + 1; day[slot] = en; return { ...prev, [date]: day }; });
+    if (text && text.trim()) supabase.rpc("gs_msg_send", { p_code: code, p_from: me, p_to: slot, p_kind: "cheer", p_message: text.trim(), p_deliver: null }).then(reloadSocial);
+    setShowCheerBox(false); setCheerText("");
+  };
+  const saveAnswer = () => {
+    if (!qInput.trim()) return;
+    supabase.rpc("gs_qa_save", { p_code: code, p_slot: me, p_qdate: today(), p_answer: qInput.trim() }).then(() => { setQInput(""); reloadSocial(); fireCelebrate("답변 완료! 💕"); });
+  };
+  const sendLetter = () => {
+    if (!letterInput.msg.trim() || !letterInput.date) { setRedeemMsg("쪽지 내용과 배달 날짜를 정해줘요."); return; }
+    supabase.rpc("gs_msg_send", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_kind: "letter", p_message: letterInput.msg.trim(), p_deliver: letterInput.date }).then(() => { setLetterInput({ msg: "", date: "" }); reloadSocial(); fireCelebrate("쪽지를 숨겨뒀어요 💌"); });
+  };
+  const openMessage = (m) => { supabase.rpc("gs_msg_open", { p_code: code, p_id: m.id }).then(reloadSocial); setOpenLetter(m); };
+  const sendGift = () => {
+    const amt = parseInt(giftInput, 10);
+    if (!amt || amt <= 0) { setRedeemMsg("선물할 포인트를 입력해줘요."); return; }
+    supabase.rpc("gs_mileage_gift", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_amount: amt }).then(({ data: ok }) => {
+      if (ok) { setGiftInput(""); setBigCeleb({ key: Date.now(), title: `${amt}p 선물 완료! 💝`, sub: `${names[me === "a" ? "b" : "a"]}에게 마음을 보냈어요` }); supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }); reloadSocial(); }
+      else setRedeemMsg("포인트가 부족해요 🥲");
+    });
+  };
+  const saveAvatar = (patch) => saveGoal(me, { avatar: { ...(goals[me] && goals[me].avatar), ...patch } });
 
   const addReward = () => {
     const title = newReward.title.trim(); const cost = parseInt(newReward.cost, 10);
@@ -523,6 +606,11 @@ export default function Page() {
   const balA = ledger.filter((r) => r.slot === "a").reduce((s, r) => s + r.delta, 0);
   const balB = ledger.filter((r) => r.slot === "b").reduce((s, r) => s + r.delta, 0);
   const myBal = me === "a" ? balA : balB;
+  const todayQ = COUPLE_Q[dayOfYear(today()) % COUPLE_Q.length];
+  const myAns = answers.find((a) => a.qdate === today() && a.slot === me);
+  const partnerAns = answers.find((a) => a.qdate === today() && a.slot !== me);
+  const inboxLetters = messages.filter((m) => m.kind === "letter" && m.to_slot === me && !m.opened);
+  const recentCheers = messages.filter((m) => m.kind === "cheer" && m.to_slot === me).slice(0, 3);
   const partner = me === "a" ? "b" : "a";
   const sortedCat = [...catalog].sort((x, y) => x.cost - y.cost);
   const nextGoal = sortedCat.find((c) => c.cost > myBal) || null;
@@ -614,6 +702,35 @@ export default function Page() {
         )}
 
         {view === "today" && (<>
+          {mine && (
+            <div className="td-qcard td-card">
+              <div className="td-qhead">💕 오늘의 질문</div>
+              <p className="td-qtext">{todayQ}</p>
+              {!myAns ? (
+                <div className="td-qanswer">
+                  <input className="td-input" placeholder="답을 적으면 상대 답이 열려요" value={qInput} onChange={(ev) => setQInput(ev.target.value)} />
+                  <button className="td-qbtn" onClick={saveAnswer}>답하기</button>
+                </div>
+              ) : (
+                <div className="td-qdone">
+                  <div className="td-qbubble me"><b>나</b><span>{myAns.answer}</span></div>
+                  {partnerAns ? <div className="td-qbubble partner"><b>{names[me === "a" ? "b" : "a"]}</b><span>{partnerAns.answer}</span></div>
+                    : <div className="td-qwait">{names[me === "a" ? "b" : "a"]}의 답을 기다리는 중… 🕊️</div>}
+                </div>
+              )}
+            </div>
+          )}
+          {mine && inboxLetters.length > 0 && (
+            <button className="td-letterbanner td-card" onClick={() => openMessage(inboxLetters[0])}>
+              <span className="td-lettericon">💌</span>
+              <div><b>{names[me === "a" ? "b" : "a"]}이(가) 남긴 쪽지가 도착했어요</b><small>탭해서 열어보기</small></div>
+            </button>
+          )}
+          {mine && recentCheers.length > 0 && (
+            <div className="td-cheerfeed td-card">
+              {recentCheers.map((c) => <div key={c.id} className="td-cheernote">💬 {c.message}</div>)}
+            </div>
+          )}
           {!mine && <div className="td-viewonly">👀 {names[page]}의 하루 · 응원볼만 보낼 수 있어요{lastSeen[page] && <span className="td-presence">🕐 {relTime(lastSeen[page])}에 기록했어요 💭</span>}</div>}
           <div className="td-datenav">
             <button onClick={() => setDate(addDays(date, -1))} aria-label="이전">‹</button>
@@ -628,12 +745,14 @@ export default function Page() {
               <text x="23" y="27" textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="Jua">{ringDone}/{ringTotal}</text>
             </svg>
             <div className="td-buddywrap">
-              <div className={"td-buddy td-breathe lvl" + lvl + (viewedComplete ? " done" : "")}>
-                {page === "a" ? <FireBuddy mood={buddyMood} /> : <FairyBuddy />}
-                {lvl > 0 && <span className="td-spark s1">✨</span>}
-                {lvl > 1 && <span className="td-spark s2">✨</span>}
-                {lvl > 2 && <span className="td-spark s3">⭐</span>}
-              </div>
+              <AvatarDeco avatar={g.avatar} big>
+                <div className={"td-buddy td-breathe lvl" + lvl + (viewedComplete ? " done" : "")}>
+                  {page === "a" ? <FireBuddy mood={buddyMood} /> : <FairyBuddy />}
+                  {lvl > 0 && <span className="td-spark s1">✨</span>}
+                  {lvl > 1 && <span className="td-spark s2">✨</span>}
+                  {lvl > 2 && <span className="td-spark s3">⭐</span>}
+                </div>
+              </AvatarDeco>
               <div className="td-name">{names[page]}<span className="td-badge">{t.emoji}{t.type}</span></div>
               <div className="td-streak">🔥 {streak}일 연속{lvl > 0 ? ` · Lv.${lvl}` : ""}</div>
             </div>
@@ -712,11 +831,21 @@ export default function Page() {
               <div className="td-cheerrow">
                 {e.cheers > 0 && <span className="td-cheercount">받은 응원 {e.cheers}</span>}
                 {!mine && (
-                  <button className="td-cheerbtn" onClick={() => sendCheer(page)}>
-                    <span className="td-ball" style={{ "--bt": t.c1 }}><span className="td-balltop" /><span className="td-ballband" /><span className="td-ballbtn">♥</span></span>{names[page]}에게 응원볼
+                  <button className="td-cheerbtn" onClick={() => setShowCheerBox((v) => !v)}>
+                    <span className="td-ball" style={{ "--bt": t.c1 }}><span className="td-balltop" /><span className="td-ballband" /><span className="td-ballbtn">♥</span></span>{names[page]}에게 응원 보내기
                     {burstKey > 0 && <span className="td-burst" key={burstKey}>{[...Array(8)].map((_, i) => <b key={i} style={{ "--tx": (i * 10 - 35) + "px", "--dl": (i % 4) * 0.05 + "s" }}>♥</b>)}</span>}
                   </button>
                 )}
+              </div>
+            )}
+            {!mine && showCheerBox && (
+              <div className="td-cheerbox">
+                <div className="td-cheerpresets">{CHEER_PRESETS.map((p, i) => <button key={i} onClick={() => sendCheerMsg(page, p)}>{p}</button>)}</div>
+                <div className="td-cheercustom">
+                  <input className="td-input" placeholder="직접 한마디 적기…" value={cheerText} onChange={(ev) => setCheerText(ev.target.value)} />
+                  <button className="td-qbtn" onClick={() => sendCheerMsg(page, cheerText)}>보내기</button>
+                </div>
+                <button className="td-cheeronly" onClick={() => sendCheerMsg(page, "")}>메시지 없이 응원볼만 던지기</button>
               </div>
             )}
             {mine && (
@@ -842,6 +971,35 @@ export default function Page() {
 
           {redeemMsg && <div className="td-pushmsg" onClick={() => setRedeemMsg("")}>{redeemMsg}</div>}
 
+          <div className="td-card td-lovecard">
+            <h3 className="td-rewardh3">💝 마음 보내기</h3>
+            <div className="td-lovegrid">
+              <div className="td-lovebox">
+                <span className="td-loveemoji">🎁</span><b>포인트 선물</b>
+                <div className="td-loverow"><input className="td-input" type="number" placeholder="포인트" value={giftInput} onChange={(ev) => setGiftInput(ev.target.value)} /><button className="td-qbtn" onClick={sendGift}>보내기</button></div>
+                <small>{names[me === "a" ? "b" : "a"]}에게 내 포인트를 나눠줘요</small>
+              </div>
+            </div>
+            <div className="td-lovebox td-letterwrite">
+              <span className="td-loveemoji">💌</span><b>몰래 쪽지 숨기기</b>
+              <textarea className="td-area td-autogrow" rows={2} placeholder={`${names[me === "a" ? "b" : "a"]}에게 남길 따뜻한 한마디…`} value={letterInput.msg} onChange={(ev) => setLetterInput((s) => ({ ...s, msg: ev.target.value }))} />
+              <div className="td-loverow"><label className="td-letterlabel">배달 날짜</label><input className="td-input" type="date" value={letterInput.date} min={today()} onChange={(ev) => setLetterInput((s) => ({ ...s, date: ev.target.value }))} /><button className="td-qbtn" onClick={sendLetter}>숨기기</button></div>
+              <small>그날 아침, 상대에게 깜짝 쪽지가 도착해요</small>
+            </div>
+          </div>
+
+          <div className="td-card td-decocard">
+            <h3 className="td-rewardh3">🎀 내 캐릭터 꾸미기</h3>
+            <div className="td-decopreview">
+              <AvatarDeco avatar={goals[me] && goals[me].avatar} big>
+                <div className="td-buddy">{me === "a" ? <FireBuddy mood="happy" /> : <FairyBuddy />}</div>
+              </AvatarDeco>
+            </div>
+            <div className="td-decogroup"><span className="td-decolabel">머리 장식</span><div className="td-decochips">{HATS.map((h) => <button key={h.id} className={"td-decochip" + ((goals[me] && goals[me].avatar && goals[me].avatar.hat || "") === h.id ? " on" : "")} onClick={() => saveAvatar({ hat: h.id })}>{h.e || "🚫"}</button>)}</div></div>
+            <div className="td-decogroup"><span className="td-decolabel">반짝임</span><div className="td-decochips">{AURAS.map((a) => <button key={a.id} className={"td-decochip" + ((goals[me] && goals[me].avatar && goals[me].avatar.aura || "") === a.id ? " on" : "")} onClick={() => saveAvatar({ aura: a.id })}>{a.e || "🚫"}</button>)}</div></div>
+            <div className="td-decogroup"><span className="td-decolabel">테두리</span><div className="td-decochips">{FRAMES.map((f) => <button key={f.id} className={"td-decochip td-framechip frame-" + (f.id || "none") + ((goals[me] && goals[me].avatar && goals[me].avatar.frame || "") === f.id ? " on" : "")} onClick={() => saveAvatar({ frame: f.id })}>{f.label}</button>)}</div></div>
+          </div>
+
           {redeems.filter((r) => r.requester !== me && r.status === "pending").length > 0 && (
             <div className="td-card td-incoming">
               <h3 className="td-rewardh3">💌 {names[partner]}이(가) 보낸 요청</h3>
@@ -927,6 +1085,16 @@ export default function Page() {
                 <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
 
+      {openLetter && (
+        <div className="td-letteropen" onClick={() => setOpenLetter(null)}>
+          <div className="td-envelope" onClick={(e) => e.stopPropagation()}>
+            <div className="td-envtop">💌</div>
+            <div className="td-envfrom">{names[openLetter.from_slot]}이(가) 남긴 쪽지</div>
+            <p className="td-envmsg">{openLetter.message}</p>
+            <button className="td-envclose" onClick={() => setOpenLetter(null)}>닫기</button>
+          </div>
+        </div>
+      )}
       {bigCeleb && (
         <div className="td-bigceleb" key={bigCeleb.key} onClick={() => setBigCeleb(null)}>
           <div className="td-bigrays" />
@@ -1197,6 +1365,62 @@ const css = `
 .td-bigclose{ position:relative; z-index:1; margin-top:18px; color:rgba(255,255,255,.55); font-size:12px; }
 @keyframes spinslow{ to{ transform:rotate(360deg); } }
 @keyframes fadein{ from{ opacity:0; } to{ opacity:1; } }
+/* 아바타 데코 */
+.td-avatar{ position:relative; display:inline-flex; align-items:center; justify-content:center; }
+.td-avatarinner{ position:relative; z-index:1; border-radius:50%; }
+.td-hat{ position:absolute; top:-14px; left:50%; transform:translateX(-50%) rotate(-8deg); font-size:26px; z-index:3; filter:drop-shadow(0 2px 3px rgba(0,0,0,.25)); }
+.td-avatar.big .td-hat{ font-size:30px; top:-16px; }
+.td-aura{ position:absolute; inset:-10px; z-index:0; pointer-events:none; }
+.td-aura span{ position:absolute; top:50%; left:50%; font-size:13px; transform-origin:0 0; animation:orbit 6s linear infinite; animation-delay:var(--dl); opacity:.9; }
+@keyframes orbit{ from{ transform:rotate(calc(var(--i) * (360deg / var(--n)))) translateX(58px) rotate(0deg); } to{ transform:rotate(calc(var(--i) * (360deg / var(--n)) + 360deg)) translateX(58px) rotate(-360deg); } }
+.td-avatar.big .td-aura span{ font-size:15px; }
+.td-avatar.frame-gold .td-avatarinner{ box-shadow:0 0 0 4px #FFD874, 0 0 14px rgba(255,200,80,.6); }
+.td-avatar.frame-rainbow .td-avatarinner{ box-shadow:0 0 0 4px transparent; background:linear-gradient(#fff,#fff) padding-box, conic-gradient(from 0deg,#FF8A80,#FFD180,#FFFF8D,#B9F6CA,#84FFFF,#B388FF,#FF8A80) border-box; border:4px solid transparent; }
+.td-avatar.frame-neon .td-avatarinner{ box-shadow:0 0 0 3px #6EE7FF, 0 0 18px #6EE7FF; }
+.td-avatar.frame-dashed .td-avatarinner{ box-shadow:0 0 0 3px var(--card); outline:3px dashed var(--c1); outline-offset:2px; }
+/* 커플 질문 */
+.td-qcard{ padding:15px; margin-bottom:12px; border:2px solid var(--soft); }
+.td-qhead{ font-family:'Jua'; font-size:14px; color:var(--c2); margin-bottom:7px; }
+.td-qtext{ font-family:'Jua'; font-size:16px; line-height:1.45; margin:0 0 11px; color:var(--ink); }
+.td-qanswer{ display:flex; gap:7px; } .td-qanswer .td-input{ margin-top:0; }
+.td-qbtn{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:13px; padding:0 15px; border-radius:11px; cursor:pointer; white-space:nowrap; }
+.td-qbubble{ display:flex; flex-direction:column; gap:2px; padding:10px 13px; border-radius:14px; margin-bottom:7px; }
+.td-qbubble b{ font-family:'Jua'; font-size:11px; color:var(--muted); } .td-qbubble span{ font-size:14px; color:var(--ink); }
+.td-qbubble.me{ background:var(--soft2); } .td-qbubble.partner{ background:var(--grat); border:1px solid var(--gratline); }
+.td-qwait{ text-align:center; font-size:13px; color:var(--muted); padding:8px; }
+/* 쪽지 배너 */
+.td-letterbanner{ display:flex; align-items:center; gap:12px; padding:14px; margin-bottom:12px; border:none; width:100%; cursor:pointer; text-align:left; background:linear-gradient(120deg,var(--grat),var(--soft2)); animation:letterpulse 2s ease-in-out infinite; }
+.td-lettericon{ font-size:30px; } .td-letterbanner b{ font-family:'Jua'; font-size:14px; color:var(--ink); display:block; } .td-letterbanner small{ font-size:11px; color:var(--muted); }
+@keyframes letterpulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.015); } }
+/* 응원 피드/박스 */
+.td-cheerfeed{ padding:12px 14px; margin-bottom:12px; }
+.td-cheernote{ font-size:13px; color:var(--ink); padding:5px 0; }
+.td-cheerbox{ margin-top:12px; background:var(--soft2); border-radius:14px; padding:12px; }
+.td-cheerpresets{ display:flex; flex-wrap:wrap; gap:6px; margin-bottom:9px; }
+.td-cheerpresets button{ border:1px solid var(--soft); background:var(--card); color:var(--ink); font-size:12px; padding:7px 11px; border-radius:999px; cursor:pointer; }
+.td-cheercustom{ display:flex; gap:7px; } .td-cheercustom .td-input{ margin-top:0; }
+.td-cheeronly{ width:100%; margin-top:9px; border:none; background:none; color:var(--muted); font-size:12px; text-decoration:underline; cursor:pointer; }
+/* 마음 보내기 / 꾸미기 */
+.td-lovecard,.td-decocard{ padding:16px; margin-bottom:12px; }
+.td-lovebox{ display:flex; flex-direction:column; gap:6px; }
+.td-loveemoji{ font-size:26px; } .td-lovebox b{ font-family:'Jua'; font-size:14px; color:var(--ink); } .td-lovebox small{ font-size:11px; color:var(--muted); }
+.td-loverow{ display:flex; gap:7px; align-items:center; } .td-loverow .td-input{ margin-top:0; } .td-letterlabel{ font-size:12px; color:var(--muted); flex:0 0 auto; }
+.td-letterwrite{ margin-top:14px; padding-top:14px; border-top:1px solid var(--line); }
+.td-decopreview{ display:flex; justify-content:center; padding:16px 0 20px; }
+.td-decogroup{ margin-bottom:12px; }
+.td-decolabel{ display:block; font-family:'Jua'; font-size:12px; color:var(--muted); margin-bottom:7px; }
+.td-decochips{ display:flex; flex-wrap:wrap; gap:7px; }
+.td-decochip{ min-width:42px; height:42px; border:2px solid var(--soft); border-radius:12px; background:var(--field); font-size:19px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0 8px; }
+.td-decochip.on{ border-color:var(--c1); background:var(--card); box-shadow:0 2px 8px var(--shadow); }
+.td-framechip{ font-family:'Jua'; font-size:12px; color:var(--ink); }
+.td-framechip.frame-gold{ box-shadow:inset 0 0 0 2px #FFD874; } .td-framechip.frame-rainbow{ background:linear-gradient(90deg,#FFE0E0,#E0F0FF); } .td-framechip.frame-neon{ box-shadow:inset 0 0 0 2px #6EE7FF; }
+/* 쪽지 개봉 모달 */
+.td-letteropen{ position:fixed; inset:0; z-index:60; background:rgba(18,14,28,.6); -webkit-backdrop-filter:blur(9px); backdrop-filter:blur(9px); display:flex; align-items:center; justify-content:center; padding:24px; animation:fadein .3s ease; }
+.td-envelope{ background:var(--card); border-radius:22px; padding:24px 22px; max-width:340px; width:100%; text-align:center; box-shadow:0 16px 50px rgba(0,0,0,.4); animation:pop .45s ease; }
+.td-envtop{ font-size:44px; animation:letterpulse 2s ease-in-out infinite; }
+.td-envfrom{ font-family:'Jua'; font-size:13px; color:var(--muted); margin:8px 0 14px; }
+.td-envmsg{ font-size:16px; line-height:1.6; color:var(--ink); margin:0 0 18px; white-space:pre-wrap; word-break:break-word; }
+.td-envclose{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:14px; padding:11px 28px; border-radius:999px; cursor:pointer; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
