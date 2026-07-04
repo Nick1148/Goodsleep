@@ -120,6 +120,38 @@ const ITEMS = [
   { id: "b_sakura", cat: "bg", tier: 3, price: 150, name: "벚꽃 정원", icon: "🌸", sp: [{ e: "🌸", st: { top: "10%", left: "12%", fontSize: 12 } }, { e: "🌸", st: { top: "30%", right: "8%", fontSize: 9 } }, { e: "💮", st: { bottom: "18%", left: "16%", fontSize: 10 } }] },
   { id: "b_night", cat: "bg", tier: 3, price: 150, name: "별 헤는 밤", icon: "🌃", sp: [{ e: "✨", st: { top: "12%", left: "16%", fontSize: 10 } }, { e: "⭐", st: { top: "22%", right: "14%", fontSize: 9 } }, { e: "🌙", st: { top: "8%", right: "30%", fontSize: 12 } }] },
   { id: "b_aurora", cat: "bg", tier: 4, price: 450, name: "오로라의 밤", icon: "🌌", sp: [{ e: "✨", st: { top: "14%", left: "14%", fontSize: 10 } }, { e: "💫", st: { top: "26%", right: "12%", fontSize: 10 } }] },
+  { id: "h_clip", cat: "head", tier: 1, price: 8, name: "노랑 실핀", icon: "📎", e: "🌟", st: { top: "2%", left: "26%", fontSize: 14, transform: "rotate(-20deg)" } },
+  { id: "h_boww", cat: "head", tier: 1, price: 10, name: "하양 리본", icon: "🤍", svg: "bow_white" },
+  { id: "h_daisy", cat: "head", tier: 2, price: 50, name: "데이지 핀", icon: "🌼", e: "🌼", st: { top: "0%", left: "24%", fontSize: 16, transform: "rotate(-12deg)" } },
+  { id: "h_cat", cat: "head", tier: 3, price: 140, name: "고양이 귀", icon: "🐱", svg: "catears" },
+  { id: "h_witch", cat: "head", tier: 3, price: 160, name: "마녀 모자", icon: "🎩", svg: "witch" },
+  { id: "h_moon", cat: "head", tier: 4, price: 400, name: "초승달 왕관", icon: "🌙", svg: "mooncrown" },
+  { id: "f_glow", cat: "face", tier: 2, price: 55, name: "볼 하이라이트", icon: "🌟", pair: true, e: "🌟", st: null, cls: "td-twk" },
+  { id: "f_tears", cat: "face", tier: 3, price: 130, name: "별 눈물", icon: "💧", e: "⭐", st: { top: "60%", left: "34%", fontSize: 11 } },
+  { id: "f_mask", cat: "face", tier: 2, price: 60, name: "잠자는 안대", icon: "😴", svg: "sleepmask" },
+  { id: "n_bowtie", cat: "neck", tier: 1, price: 12, name: "나비 넥타이", icon: "🎀", e: "🎀", st: { bottom: "2%", left: "50%", transform: "translateX(-50%)", fontSize: 16 } },
+  { id: "n_ribbon", cat: "neck", tier: 2, price: 50, name: "초커 리본", icon: "🏵️", svg: "choker" },
+  { id: "n_heart", cat: "neck", tier: 3, price: 150, name: "하트 목걸이", icon: "💛", svg: "heartnk" },
+  { id: "p_book", cat: "prop", tier: 1, price: 12, name: "동화책", icon: "📖", e: "📖" },
+  { id: "p_cam", cat: "prop", tier: 1, price: 15, name: "레트로 카메라", icon: "📷", e: "📷" },
+  { id: "p_star", cat: "prop", tier: 2, price: 55, name: "별 지팡이", icon: "⭐", e: "⭐", st: { bottom: "-6%", right: "-14%", fontSize: 24 }, cls: "td-twk" },
+  { id: "p_moon", cat: "prop", tier: 3, price: 140, name: "달 조각", icon: "🌙", e: "🌙", st: { bottom: "-6%", right: "-14%", fontSize: 26 }, cls: "td-glow" },
+  { id: "p_cake", cat: "prop", tier: 2, price: 60, name: "생일 케이크", icon: "🎂", e: "🎂" },
+  { id: "p_planet", cat: "prop", tier: 4, price: 350, name: "작은 행성", icon: "🪐", e: "🪐", st: { bottom: "-6%", right: "-16%", fontSize: 28 }, cls: "td-spin" },
+  { id: "a_music", cat: "aura", tier: 2, price: 50, name: "음표", icon: "🎵", ps: ["🎵", "🎶", "♪"] },
+  { id: "a_leaf", cat: "aura", tier: 2, price: 45, name: "가을 낙엽", icon: "🍁", ps: ["🍁", "🍂", "🍃"] },
+  { id: "a_fire", cat: "aura", tier: 3, price: 150, name: "불꽃 정령", icon: "🔥", ps: ["🔥", "✨", "🔥"] },
+  { id: "a_diamond", cat: "aura", tier: 3, price: 160, name: "다이아 먼지", icon: "💎", ps: ["💎", "✨", "💠"] },
+  { id: "a_galaxy", cat: "aura", tier: 4, price: 450, name: "은하수", icon: "🌌", ps: ["🌌", "⭐", "💫", "✨"], spd: 2 },
+  { id: "a_rose", cat: "aura", tier: 3, price: 150, name: "장미 꽃잎", icon: "🌹", ps: ["🌹", "🥀", "🌹"] },
+  { id: "fr_heart", cat: "frame", tier: 2, price: 70, name: "하트 테두리", icon: "💗" },
+  { id: "fr_star", cat: "frame", tier: 3, price: 140, name: "별 테두리", icon: "⭐" },
+  { id: "fr_fire", cat: "frame", tier: 4, price: 360, name: "불꽃 링", icon: "🔥" },
+  { id: "fr_ice", cat: "frame", tier: 4, price: 360, name: "얼음 링", icon: "❄️" },
+  { id: "b_ocean", cat: "bg", tier: 2, price: 65, name: "바닷속", icon: "🌊", sp: [{ e: "🐠", st: { top: "20%", left: "10%", fontSize: 12 } }, { e: "🫧", st: { bottom: "20%", right: "12%", fontSize: 10 } }] },
+  { id: "b_forest", cat: "bg", tier: 3, price: 145, name: "숲속", icon: "🌲", sp: [{ e: "🌿", st: { bottom: "12%", left: "10%", fontSize: 13 } }, { e: "🍄", st: { bottom: "14%", right: "14%", fontSize: 11 } }] },
+  { id: "b_space", cat: "bg", tier: 4, price: 480, name: "우주", icon: "🚀", sp: [{ e: "🪐", st: { top: "16%", right: "12%", fontSize: 14 } }, { e: "⭐", st: { top: "30%", left: "14%", fontSize: 9 } }, { e: "✨", st: { bottom: "20%", right: "20%", fontSize: 10 } }] },
+  { id: "b_heart", cat: "bg", tier: 3, price: 150, name: "하트 가득", icon: "💕", sp: [{ e: "💗", st: { top: "16%", left: "14%", fontSize: 12 } }, { e: "💕", st: { top: "30%", right: "12%", fontSize: 10 } }, { e: "💓", st: { bottom: "18%", left: "18%", fontSize: 11 } }] },
 ];
 const ITEMS_BY_ID = Object.fromEntries(ITEMS.map((it) => [it.id, it]));
 const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
@@ -221,6 +253,13 @@ const SVGS = {
   scarf: () => (<svg className="td-sv" style={{ bottom: "-5%", left: "50%", transform: "translateX(-50%)", width: "92%" }} viewBox="0 0 100 32"><defs><pattern id="gschk" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="4.5" height="9" fill="rgba(255,255,255,.4)" /></pattern></defs><path d="M6 8 Q50 22 94 8 L94 16 Q50 30 6 16 Z" fill="#D64550" /><path d="M6 8 Q50 22 94 8 L94 16 Q50 30 6 16 Z" fill="url(#gschk)" /><rect x="60" y="14" width="12" height="16" rx="3" fill="#D64550" /></svg>),
   pearl: () => (<svg className="td-sv" style={{ bottom: "1%", left: "50%", transform: "translateX(-50%)", width: "68%" }} viewBox="0 0 80 22">{[0, 1, 2, 3, 4, 5, 6].map((i) => { const x = 10 + i * 10; const y = 7 + Math.sin((i / 6) * Math.PI) * 9; return <circle key={i} cx={x} cy={y} r="3.6" fill="#FDF6EC" stroke="#E0D2BE" strokeWidth="1" />; })}</svg>),
   aurorascarf: () => (<svg className="td-sv td-hue" style={{ bottom: "-5%", left: "50%", transform: "translateX(-50%)", width: "92%" }} viewBox="0 0 100 26"><defs><linearGradient id="gsaur" x1="0" x2="1"><stop offset="0" stopColor="#8FD3FF" /><stop offset=".5" stopColor="#C9A6FF" /><stop offset="1" stopColor="#FF9EC1" /></linearGradient></defs><path d="M6 6 Q50 20 94 6 L94 15 Q50 29 6 15Z" fill="url(#gsaur)" /></svg>),
+  bow_white: () => (<svg className="td-sv" style={{ top: "-16%", left: "50%", transform: "translateX(-50%) rotate(-8deg)", width: "54%" }} viewBox="0 0 60 34"><path d="M30 17 L9 5 Q2 2 2 10 L2 24 Q2 32 9 29 L30 17Z" fill="#FFFFFF" stroke="#E8D9E0" strokeWidth="1.5" /><path d="M30 17 L51 5 Q58 2 58 10 L58 24 Q58 32 51 29 L30 17Z" fill="#FFFFFF" stroke="#E8D9E0" strokeWidth="1.5" /><circle cx="30" cy="17" r="6.5" fill="#F0E4EA" /></svg>),
+  catears: () => (<svg className="td-sv" style={{ top: "-16%", left: "50%", transform: "translateX(-50%)", width: "78%" }} viewBox="0 0 90 30"><path d="M14 28 L10 4 L30 20 Z" fill="#C9A4E0" /><path d="M16 25 L14 10 L26 20 Z" fill="#F3D9F0" /><path d="M76 28 L80 4 L60 20 Z" fill="#C9A4E0" /><path d="M74 25 L76 10 L64 20 Z" fill="#F3D9F0" /></svg>),
+  witch: () => (<svg className="td-sv" style={{ top: "-30%", left: "50%", transform: "translateX(-50%) rotate(6deg)", width: "58%" }} viewBox="0 0 60 44"><ellipse cx="30" cy="40" rx="28" ry="5" fill="#3A2A55" /><path d="M18 40 Q22 8 42 3 Q30 22 42 40 Z" fill="#4A3570" /><path d="M20 33 Q30 30 40 33 L40 37 Q30 34 20 37 Z" fill="#B57BD6" /><circle cx="35" cy="16" r="2.6" fill="#FFD874" /></svg>),
+  mooncrown: () => (<svg className="td-sv td-halofloat" style={{ top: "-22%", left: "50%", transform: "translateX(-50%)", width: "60%" }} viewBox="0 0 64 30"><path d="M6 28 Q6 6 26 6 Q16 16 26 28 Z" fill="#FFE08A" /><path d="M58 28 Q58 6 38 6 Q48 16 38 28 Z" fill="#FFE08A" /><circle cx="32" cy="9" r="5" fill="#C9A6FF" /><circle cx="32" cy="9" r="2" fill="#fff" /></svg>),
+  sleepmask: () => (<svg className="td-sv" style={{ top: "44%", left: "50%", transform: "translateX(-50%)", width: "66%" }} viewBox="0 0 80 22"><rect x="6" y="4" width="68" height="15" rx="7.5" fill="#B29CE0" /><path d="M20 12 q5 4 10 0M50 12 q5 4 10 0" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" /></svg>),
+  choker: () => (<svg className="td-sv" style={{ bottom: "0%", left: "50%", transform: "translateX(-50%)", width: "72%" }} viewBox="0 0 80 16"><rect x="4" y="6" width="72" height="5" rx="2.5" fill="#E4568C" /><circle cx="40" cy="8.5" r="5" fill="#FF8FB3" /><circle cx="40" cy="8.5" r="2" fill="#fff" /></svg>),
+  heartnk: () => (<svg className="td-sv" style={{ bottom: "-2%", left: "50%", transform: "translateX(-50%)", width: "60%" }} viewBox="0 0 70 26"><path d="M6 4 Q35 16 64 4" stroke="#F6C453" strokeWidth="2" fill="none" /><path d="M35 12 q-6 -7 -11 -1 q-3 4 11 11 q14 -7 11 -11 q-5 -6 -11 1Z" fill="#FFC93C" /></svg>),
 };
 function ItemNode({ it }) {
   if (!it) return null;
@@ -318,6 +357,8 @@ export default function Page() {
   const [unbox, setUnbox] = useState(null);
   const [giftItem, setGiftItem] = useState(null);
   const [giftNote, setGiftNote] = useState("");
+  const [gachaResult, setGachaResult] = useState(null);
+  const [gachaRolling, setGachaRolling] = useState(false);
   const [ledger, setLedger] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [redeems, setRedeems] = useState([]);
@@ -528,6 +569,8 @@ export default function Page() {
     });
   };
   const saveAvatar = (patch) => saveGoal(me, { avatar: { ...(goals[me] && goals[me].avatar), ...patch } });
+  const styleTarget = page; // 스타일 탭은 상단 a/b 탭을 따름
+  const styleMine = page === me;
   const reloadShopData = () => {
     supabase.rpc("gs_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); });
     supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
@@ -545,6 +588,31 @@ export default function Page() {
       if (ok) { setGiftItem(null); setGiftNote(""); reloadShopData(); setBigCeleb({ key: Date.now(), title: "선물 완료! 💝", sub: `${names[pto]}에게 ${it.name}을(를) 보냈어요` }); }
       else setRedeemMsg("포인트가 부족하거나 상대가 이미 보유 중이에요 🥲");
     });
+  };
+  const GACHA_COST = 20, GACHA_COST10 = 180;
+  const gachaPool = ITEMS.map((it) => ({ id: it.id, tier: it.tier, price: it.price }));
+  const doGacha = (count) => {
+    if (gachaRolling) return;
+    const cost = count === 10 ? GACHA_COST10 : GACHA_COST;
+    if (myBal < cost) { setRedeemMsg("포인트가 부족해요 🥲"); return; }
+    setGachaRolling(true); setGachaResult(null);
+    const results = [];
+    const run = async () => {
+      for (let i = 0; i < count; i++) {
+        const guarantee = (count === 10 && i === 9) ? 3 : null; // 10연차 마지막은 에픽↑ 보장
+        const { data } = await supabase.rpc("gs_gacha", { p_code: code, p_slot: me, p_cost: cost / count, p_pool: gachaPool, p_guarantee: guarantee });
+        if (data && data.ok) results.push(data); else { break; }
+      }
+      const [{ data: inv }, { data: mrows }] = await Promise.all([
+        supabase.rpc("gs_inventory_get", { p_code: code }),
+        supabase.rpc("gs_mileage_get", { p_code: code }),
+      ]);
+      if (inv) setInventory(inv); if (mrows) setLedger(mrows);
+      setGachaRolling(false);
+      setGachaResult(results.map((r) => ({ ...r, item: r.item ? ITEMS_BY_ID[r.item] : null })));
+      try { navigator.vibrate && navigator.vibrate([50, 30, 80]); } catch (e) {}
+    };
+    run();
   };
 
   const addReward = () => {
@@ -1195,23 +1263,27 @@ export default function Page() {
         </>)}
 
                 {view === "style" && (<>
+          {!styleMine && <div className="td-viewonly">👀 {names[page]}의 캐릭터를 구경하고 있어요</div>}
           <div className="td-stylehero td-card">
             <span className="td-stylebal">🪙 <CountUp value={myBal} />p</span>
             <div className="td-stylepreview">
-              <AvatarDeco avatar={goals[me] && goals[me].avatar} owned={ownedSets[me]} tryOn={tryOn} big>
-                <div className="td-buddy" style={{ width: 118, height: 118 }}>{me === "a" ? <FireBuddy mood="happy" /> : <FairyBuddy />}</div>
+              <AvatarDeco avatar={goals[page] && goals[page].avatar} owned={ownedSets[page]} tryOn={styleMine ? tryOn : {}} big>
+                <div className="td-buddy" style={{ width: 118, height: 118 }}>{page === "a" ? <FireBuddy mood="happy" /> : <FairyBuddy />}</div>
               </AvatarDeco>
             </div>
-            {Object.keys(tryOn).length > 0 && (
+            {styleMine && Object.keys(tryOn).length > 0 && (
               <div className="td-tryonbar"><span>👀 입어보는 중이에요</span><button onClick={() => setTryOn({})}>원래대로</button></div>
             )}
-            <div className="td-stylesubs">
-              {[["closet", "👗 옷장"], ["shop", "🛍️ 상점"]].map(([k, l]) => (
-                <button key={k} className={styleSub === k ? "on" : ""} onClick={() => { setStyleSub(k); setTryOn({}); }}>{l}</button>
-              ))}
-            </div>
+            {styleMine ? (
+              <div className="td-stylesubs">
+                {[["closet", "👗 옷장"], ["shop", "🛍️ 상점"], ["gacha", "🎰 뽑기"]].map(([k, l]) => (
+                  <button key={k} className={styleSub === k ? "on" : ""} onClick={() => { setStyleSub(k); setTryOn({}); }}>{l}</button>
+                ))}
+              </div>
+            ) : <p className="td-shophint">내 캐릭터를 꾸미려면 위에서 '{names[me]} (나)' 탭을 눌러요</p>}
           </div>
 
+          {styleMine && (<>
           {redeemMsg && <div className="td-pushmsg" onClick={() => setRedeemMsg("")}>{redeemMsg}</div>}
 
           {giftInbox.length > 0 && (
@@ -1223,7 +1295,7 @@ export default function Page() {
 
           {styleSub === "closet" && (
             <div className="td-card td-shopcard">
-              <h3 className="td-rewardh3">👗 내 옷장 <span className="td-ownedcnt">{inventory.filter((iv) => iv.slot === me).length}개 보유</span></h3>
+              <h3 className="td-rewardh3">👗 내 옷장 <span className="td-ownedcnt">{inventory.filter((iv) => iv.slot === me).length}/{ITEMS.length}개</span></h3>
               {CATS.map(([cat, label]) => {
                 const mine2 = ITEMS.filter((it) => it.cat === cat && ownedSets[me].has(it.id));
                 const eqId = ((goals[me] && goals[me].avatar) || {})[cat] || "";
@@ -1232,7 +1304,7 @@ export default function Page() {
                     <span className="td-decolabel">{label}</span>
                     <div className="td-decochips">
                       <button className={"td-decochip" + (!eqId ? " on" : "")} onClick={() => saveAvatar({ [cat]: "" })}>🚫</button>
-                      {mine2.length === 0 && <span className="td-closetempty">상점에서 첫 아이템을 데려와봐요 →</span>}
+                      {mine2.length === 0 && <span className="td-closetempty">상점·뽑기에서 데려와봐요 →</span>}
                       {mine2.map((it) => <button key={it.id} className={"td-decochip tier" + it.tier + (eqId === it.id ? " on" : "")} onClick={() => saveAvatar({ [cat]: it.id })}>{it.icon}</button>)}
                     </div>
                   </div>
@@ -1270,11 +1342,46 @@ export default function Page() {
             </div>
             <p className="td-shophint">아이템을 탭하면 미리 입어볼 수 있어요 👀</p>
           </>)}
+
+          {styleSub === "gacha" && (
+            <div className="td-card td-gachacard">
+              <div className="td-gachamachine"><span className="td-gachaball">{gachaRolling ? "🎲" : "🎁"}</span></div>
+              <h3 className="td-gachatitle">🎰 랜덤 뽑기</h3>
+              <p className="td-gachadesc">뭘 뽑아도 아이템은 나와요! 이미 가진 등급이면 포인트로 일부 환급, 가끔 <b>잭팟(2배 환급)</b>도 떠요 ✨</p>
+              <div className="td-gacharates">
+                <span>⚪ 베이직 55%</span><span>🌿 레어 30%</span><span>💜 에픽 12%</span><span>🌟 레전 3%</span>
+              </div>
+              <div className="td-gachabtns">
+                <button className="td-gachabtn" disabled={gachaRolling || myBal < 20} onClick={() => doGacha(1)}>1회 뽑기<b>🪙 20p</b></button>
+                <button className="td-gachabtn big" disabled={gachaRolling || myBal < 180} onClick={() => doGacha(10)}>10연차<b>🪙 180p</b><small>마지막 에픽↑ 보장</small></button>
+              </div>
+            </div>
+          )}
+          </>)}
         </>)}
 
         <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
 
+      {gachaResult && (
+        <div className="td-bigceleb" onClick={() => setGachaResult(null)}>
+          <div className="td-gacharesult" onClick={(ev) => ev.stopPropagation()}>
+            <h2>🎉 뽑기 결과</h2>
+            <div className="td-gachagrid">
+              {gachaResult.map((r, i) => (
+                <div key={i} className={"td-gachaitem tier" + (r.tier || 1) + (r.dupe ? " dupe" : "")}>
+                  <span className="td-gachaemoji">{r.dupe ? "🔁" : (r.item ? (r.item.icon || r.item.e) : "🎁")}</span>
+                  <b>{r.dupe ? "중복" : (r.item ? r.item.name : "")}</b>
+                  {r.dupe ? <small>+{r.refund}p 환급</small> : <small>{TIER_NAMES[r.tier]}</small>}
+                  {r.jackpot && <span className="td-jackpot">💰 잭팟! +{r.jackpotAmt}p</span>}
+                </div>
+              ))}
+            </div>
+            <button className="td-envclose" onClick={() => setGachaResult(null)}>확인</button>
+            <span className="td-bigclose">받은 아이템은 옷장에 담겼어요</span>
+          </div>
+        </div>
+      )}
       {unbox && <UnboxOverlay data={unbox} names={names} onClose={() => setUnbox(null)} onOpened={() => { if (unbox.invId) supabase.rpc("gs_item_open", { p_code: code, p_id: unbox.invId }).then(() => supabase.rpc("gs_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); })); }} />}
       {giftItem && (
         <div className="td-letteropen" onClick={() => setGiftItem(null)}>
@@ -1712,6 +1819,31 @@ const css = `
 .td-unboxnote{ margin-top:10px !important; font-size:14px !important; color:#FFE3EE !important; }
 .td-unboxglow{ position:absolute; inset:-70px; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.28), transparent 70%); z-index:-1; }
 .td-unboxreveal.tier4 .td-unboxglow{ background:conic-gradient(#FF8A80,#FFD180,#FFFF8D,#B9F6CA,#84FFFF,#B388FF,#FF8A80); filter:blur(34px); opacity:.5; animation:spinslow 8s linear infinite; }
+/* 가챠 */
+.td-gachacard{ padding:20px 16px; margin-bottom:12px; text-align:center; }
+.td-gachamachine{ width:96px; height:96px; margin:0 auto 4px; border-radius:26px; background:linear-gradient(160deg,#FFE3EF,#E6ECFF); display:flex; align-items:center; justify-content:center; box-shadow:inset 0 -6px 14px rgba(0,0,0,.06); }
+.td-gachaball{ font-size:48px; animation:boxshake 1.3s ease-in-out infinite; }
+.td-gachatitle{ font-family:'Jua'; font-size:17px; margin:10px 0 6px; color:var(--ink); }
+.td-gachadesc{ font-size:12px; color:var(--muted); line-height:1.5; margin:0 8px 12px; } .td-gachadesc b{ color:var(--c2); }
+.td-gacharates{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px 12px; font-size:11px; color:var(--muted); font-family:'Jua'; margin-bottom:16px; }
+.td-gachabtns{ display:flex; gap:10px; }
+.td-gachabtn{ flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; border:none; border-radius:16px; padding:14px 8px; background:var(--soft2); color:var(--ink); font-family:'Jua'; font-size:14px; cursor:pointer; }
+.td-gachabtn b{ font-size:13px; color:var(--c2); }
+.td-gachabtn small{ font-size:10px; color:var(--muted); }
+.td-gachabtn.big{ background:linear-gradient(150deg,#FFE9A8,#FFD1E8); color:#9A5A2C; }
+.td-gachabtn.big b{ color:#B8860B; }
+.td-gachabtn:disabled{ opacity:.45; cursor:default; }
+.td-gacharesult{ background:var(--card); border-radius:22px; padding:22px 18px; max-width:360px; width:100%; text-align:center; box-shadow:0 16px 50px rgba(0,0,0,.4); animation:pop .4s ease; max-height:80vh; overflow-y:auto; }
+.td-gacharesult h2{ font-family:'Jua'; font-size:20px; color:var(--ink); margin:0 0 14px; }
+.td-gachagrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:9px; margin-bottom:16px; }
+.td-gachaitem{ position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; border-radius:14px; padding:12px 6px 8px; background:var(--soft2); border:2px solid var(--line); }
+.td-gachaitem.tier2{ border-color:#B9E8CC; } .td-gachaitem.tier3{ border-color:#D9C8F5; } .td-gachaitem.tier4{ border-color:#FFD874; background:linear-gradient(150deg,#FFF9E8,#FFEFF7); animation:pop .5s ease; }
+.td-gachaitem.dupe{ opacity:.7; }
+.td-gachaemoji{ font-size:30px; }
+.td-gachaitem b{ font-family:'Jua'; font-size:11px; color:var(--ink); text-align:center; }
+.td-gachaitem small{ font-size:9px; color:var(--muted); }
+.td-jackpot{ position:absolute; top:-8px; right:-6px; background:#FFD874; color:#8A5A1C; font-family:'Jua'; font-size:9px; padding:2px 6px; border-radius:999px; transform:rotate(8deg); box-shadow:0 2px 6px rgba(0,0,0,.2); }
+.td-spin{ animation:spinslow 4s linear infinite; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
