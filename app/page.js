@@ -66,18 +66,62 @@ const COUPLE_Q = [
   "함께 만들어가고 싶은 우리의 규칙은?", "상대의 어떤 취향을 응원해?", "오늘 상대 덕분에 나아진 기분이 있다면?", "서로에게 첫인상은 어땠을까?", "상대와 오래 하고 싶은 약속 하나는?",
 ];
 const CHEER_PRESETS = ["오늘도 고생했어 🤍", "잘 자, 내 꿈 꿔 🌙", "네가 최고야 ✨", "보고 싶다 🥰", "오늘 하루도 예뻤어", "푹 쉬어, 사랑해 💗", "늘 응원해 📣", "고마워, 늘 🌸"];
-const HATS = [
-  { id: "", label: "없음", e: "" }, { id: "ribbon", label: "리본", e: "🎀" }, { id: "crown", label: "왕관", e: "👑" },
-  { id: "flower", label: "꽃", e: "🌸" }, { id: "cap", label: "모자", e: "🧢" }, { id: "santa", label: "산타", e: "🎅" },
-  { id: "star", label: "별", e: "⭐" }, { id: "halo", label: "천사", e: "😇" }, { id: "party", label: "파티", e: "🎉" },
+const TIER_NAMES = { 1: "베이직", 2: "레어", 3: "에픽", 4: "레전더리" };
+const CATS = [["head", "👒 머리"], ["face", "🙂 얼굴"], ["neck", "🧣 목"], ["prop", "🎈 소품"], ["aura", "✨ 오라"], ["frame", "🖼️ 프레임"], ["bg", "🌌 배경"]];
+const ITEMS = [
+  { id: "h_bow_p", cat: "head", tier: 1, price: 10, name: "분홍 리본", icon: "🎀", svg: "bow_pink" },
+  { id: "h_bow_b", cat: "head", tier: 1, price: 10, name: "하늘 리본", icon: "🩵", svg: "bow_blue" },
+  { id: "h_cap", cat: "head", tier: 1, price: 12, name: "야구캡", icon: "🧢", e: "🧢" },
+  { id: "h_straw", cat: "head", tier: 1, price: 15, name: "밀짚모자", icon: "👒", e: "👒" },
+  { id: "h_cherry", cat: "head", tier: 2, price: 45, name: "체리 핀", icon: "🍒", e: "🍒", st: { left: "20%", top: "-6%", transform: "rotate(-18deg)", fontSize: 18 } },
+  { id: "h_beret", cat: "head", tier: 2, price: 60, name: "프렌치 베레모", icon: "🧶", svg: "beret" },
+  { id: "h_bear", cat: "head", tier: 2, price: 70, name: "곰돌이 귀", icon: "🐻", svg: "bear" },
+  { id: "h_fcrown", cat: "head", tier: 3, price: 150, name: "벚꽃 화관", icon: "🌸", svg: "fcrown" },
+  { id: "h_tiara", cat: "head", tier: 4, price: 420, name: "보석 티아라", icon: "👑", svg: "tiara" },
+  { id: "h_halo", cat: "head", tier: 4, price: 450, name: "천사의 링", icon: "😇", svg: "halo" },
+  { id: "f_blush", cat: "face", tier: 1, price: 10, name: "복숭아 블러시", icon: "🍑", svg: "blush" },
+  { id: "f_glass", cat: "face", tier: 1, price: 15, name: "동글 안경", icon: "👓", svg: "glasses" },
+  { id: "f_hblush", cat: "face", tier: 2, price: 50, name: "하트 볼터치", icon: "💗", pair: true, e: "💗" },
+  { id: "f_star", cat: "face", tier: 2, price: 45, name: "별 스티커", icon: "⭐", e: "⭐", st: { top: "54%", right: "18%", fontSize: 12 } },
+  { id: "f_sparkle", cat: "face", tier: 3, price: 130, name: "반짝 페이스", icon: "✨", pair: true, e: "✨", cls: "td-twk" },
+  { id: "f_holo", cat: "face", tier: 4, price: 300, name: "홀로 하트뺨", icon: "💖", pair: true, e: "💖", cls: "td-beat" },
+  { id: "n_tie", cat: "neck", tier: 1, price: 12, name: "리본 타이", icon: "🎀", svg: "tie" },
+  { id: "n_scarf", cat: "neck", tier: 2, price: 55, name: "체크 목도리", icon: "🧣", svg: "scarf" },
+  { id: "n_daisy", cat: "neck", tier: 2, price: 60, name: "데이지 목걸이", icon: "🌼", e: "🌼", st: { bottom: "0%", left: "50%", transform: "translateX(-50%)", fontSize: 15 } },
+  { id: "n_pearl", cat: "neck", tier: 3, price: 150, name: "진주 목걸이", icon: "📿", svg: "pearl" },
+  { id: "n_aurora", cat: "neck", tier: 4, price: 350, name: "오로라 스카프", icon: "🌈", svg: "aurorascarf" },
+  { id: "p_candy", cat: "prop", tier: 1, price: 10, name: "막대사탕", icon: "🍭", e: "🍭" },
+  { id: "p_boba", cat: "prop", tier: 1, price: 15, name: "버블티", icon: "🧋", e: "🧋" },
+  { id: "p_tulip", cat: "prop", tier: 2, price: 45, name: "튤립 한 송이", icon: "🌷", e: "🌷" },
+  { id: "p_balloon", cat: "prop", tier: 2, price: 50, name: "빨간 풍선", icon: "🎈", e: "🎈" },
+  { id: "p_bear", cat: "prop", tier: 2, price: 70, name: "미니 곰인형", icon: "🧸", e: "🧸" },
+  { id: "p_bouquet", cat: "prop", tier: 3, price: 140, name: "파스텔 꽃다발", icon: "💐", e: "💐" },
+  { id: "p_wand", cat: "prop", tier: 3, price: 160, name: "요술봉", icon: "🪄", e: "🪄", cls: "td-twk" },
+  { id: "p_lantern", cat: "prop", tier: 4, price: 320, name: "반딧불 랜턴", icon: "🏮", e: "🏮", cls: "td-glow" },
+  { id: "a_dot", cat: "aura", tier: 1, price: 10, name: "은은한 반짝", icon: "✧", ps: ["✧", "✧", "✧"] },
+  { id: "a_heart", cat: "aura", tier: 2, price: 45, name: "하트", icon: "💗", ps: ["💗", "💕", "💖"] },
+  { id: "a_star", cat: "aura", tier: 2, price: 45, name: "별빛", icon: "⭐", ps: ["⭐", "🌟", "✨"] },
+  { id: "a_petal", cat: "aura", tier: 2, price: 60, name: "벚꽃잎", icon: "🌸", ps: ["🌸", "💮", "🌸"] },
+  { id: "a_bubble", cat: "aura", tier: 2, price: 50, name: "비눗방울", icon: "🫧", ps: ["🫧", "🫧", "💧"] },
+  { id: "a_btf", cat: "aura", tier: 3, price: 150, name: "나비 정원", icon: "🦋", ps: ["🦋", "🦋", "✨"] },
+  { id: "a_snow", cat: "aura", tier: 3, price: 140, name: "첫눈", icon: "❄️", ps: ["❄️", "🤍", "❄️"] },
+  { id: "a_meteor", cat: "aura", tier: 4, price: 420, name: "유성우", icon: "🌠", ps: ["🌠", "💫", "⭐"], spd: 2 },
+  { id: "fr_pink", cat: "frame", tier: 1, price: 10, name: "파스텔 핑크 링", icon: "🩷" },
+  { id: "fr_mint", cat: "frame", tier: 1, price: 10, name: "파스텔 민트 링", icon: "💚" },
+  { id: "fr_lav", cat: "frame", tier: 1, price: 10, name: "라벤더 링", icon: "💜" },
+  { id: "fr_gold", cat: "frame", tier: 2, price: 70, name: "골드 링", icon: "🥇" },
+  { id: "fr_rose", cat: "frame", tier: 2, price: 80, name: "로즈골드 링", icon: "🌹" },
+  { id: "fr_lace", cat: "frame", tier: 3, price: 150, name: "레이스", icon: "🤍" },
+  { id: "fr_neon", cat: "frame", tier: 3, price: 130, name: "네온", icon: "💠" },
+  { id: "fr_holo", cat: "frame", tier: 4, price: 380, name: "홀로그램", icon: "🌈" },
+  { id: "b_pastel", cat: "bg", tier: 1, price: 15, name: "파스텔 하늘", icon: "🎨" },
+  { id: "b_cloud", cat: "bg", tier: 2, price: 60, name: "구름 위 산책", icon: "☁️", sp: [{ e: "☁️", st: { top: "14%", left: "8%", fontSize: 13 } }, { e: "☁️", st: { top: "34%", right: "6%", fontSize: 10 } }] },
+  { id: "b_sunset", cat: "bg", tier: 2, price: 70, name: "살구빛 노을", icon: "🌇", sp: [{ e: "🌤️", st: { top: "14%", right: "14%", fontSize: 12 } }] },
+  { id: "b_sakura", cat: "bg", tier: 3, price: 150, name: "벚꽃 정원", icon: "🌸", sp: [{ e: "🌸", st: { top: "10%", left: "12%", fontSize: 12 } }, { e: "🌸", st: { top: "30%", right: "8%", fontSize: 9 } }, { e: "💮", st: { bottom: "18%", left: "16%", fontSize: 10 } }] },
+  { id: "b_night", cat: "bg", tier: 3, price: 150, name: "별 헤는 밤", icon: "🌃", sp: [{ e: "✨", st: { top: "12%", left: "16%", fontSize: 10 } }, { e: "⭐", st: { top: "22%", right: "14%", fontSize: 9 } }, { e: "🌙", st: { top: "8%", right: "30%", fontSize: 12 } }] },
+  { id: "b_aurora", cat: "bg", tier: 4, price: 450, name: "오로라의 밤", icon: "🌌", sp: [{ e: "✨", st: { top: "14%", left: "14%", fontSize: 10 } }, { e: "💫", st: { top: "26%", right: "12%", fontSize: 10 } }] },
 ];
-const AURAS = [
-  { id: "", label: "없음" }, { id: "hearts", label: "하트", e: "💗" }, { id: "sparkle", label: "반짝", e: "✨" },
-  { id: "petals", label: "꽃잎", e: "🌸" }, { id: "stars", label: "별빛", e: "⭐" }, { id: "bubbles", label: "방울", e: "🫧" },
-];
-const FRAMES = [
-  { id: "", label: "기본" }, { id: "gold", label: "골드" }, { id: "rainbow", label: "무지개" }, { id: "neon", label: "네온" }, { id: "dashed", label: "점선" },
-];
+const ITEMS_BY_ID = Object.fromEntries(ITEMS.map((it) => [it.id, it]));
 const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
 const GOALS_DATE = "__goals__";
 const POINTS = { full: 10, partial: 2, weekly: 15, monthly: 100, m30: 50, m100: 200, m365: 1000 };
@@ -163,22 +207,73 @@ function CountUp({ value, format }) {
 const relTime = (ts) => { const s = (Date.now() - new Date(ts).getTime()) / 1000; if (s < 120) return "방금 전"; if (s < 3600) return `${Math.floor(s / 60)}분 전`; if (s < 86400) return `${Math.floor(s / 3600)}시간 전`; return `${Math.floor(s / 86400)}일 전`; };
 function FairyBuddy() { return <img src="/seal.jpg" alt="지인" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />; }
 
-function AvatarDeco({ avatar, children, big }) {
-  const av = avatar || {};
-  const hat = HATS.find((h) => h.id === av.hat && h.id);
-  const aura = AURAS.find((a) => a.id === av.aura && a.id);
+const SVGS = {
+  bow_pink: () => (<svg className="td-sv" style={{ top: "-16%", left: "50%", transform: "translateX(-50%) rotate(-8deg)", width: "54%" }} viewBox="0 0 60 34"><path d="M30 17 L9 5 Q2 2 2 10 L2 24 Q2 32 9 29 L30 17Z" fill="#FF8FB3" /><path d="M30 17 L51 5 Q58 2 58 10 L58 24 Q58 32 51 29 L30 17Z" fill="#FF8FB3" /><circle cx="30" cy="17" r="6.5" fill="#E4568C" /></svg>),
+  bow_blue: () => (<svg className="td-sv" style={{ top: "-16%", left: "50%", transform: "translateX(-50%) rotate(-8deg)", width: "54%" }} viewBox="0 0 60 34"><path d="M30 17 L9 5 Q2 2 2 10 L2 24 Q2 32 9 29 L30 17Z" fill="#8FC7FF" /><path d="M30 17 L51 5 Q58 2 58 10 L58 24 Q58 32 51 29 L30 17Z" fill="#8FC7FF" /><circle cx="30" cy="17" r="6.5" fill="#4E8FD9" /></svg>),
+  beret: () => (<svg className="td-sv" style={{ top: "-15%", left: "48%", transform: "translateX(-50%) rotate(-10deg)", width: "62%" }} viewBox="0 0 70 34"><ellipse cx="35" cy="24" rx="33" ry="11" fill="#D64550" /><ellipse cx="35" cy="17" rx="26" ry="12" fill="#E85963" /><rect x="33" y="2" width="4" height="8" rx="2" fill="#B93A44" /></svg>),
+  bear: () => (<svg className="td-sv" style={{ top: "-12%", left: "50%", transform: "translateX(-50%)", width: "84%" }} viewBox="0 0 100 30"><circle cx="18" cy="16" r="13" fill="#B98A64" /><circle cx="18" cy="16" r="7" fill="#E8C6A8" /><circle cx="82" cy="16" r="13" fill="#B98A64" /><circle cx="82" cy="16" r="7" fill="#E8C6A8" /></svg>),
+  fcrown: () => (<svg className="td-sv" style={{ top: "-11%", left: "50%", transform: "translateX(-50%)", width: "80%" }} viewBox="0 0 90 26"><path d="M6 20 Q45 4 84 20" stroke="#7FBF8E" strokeWidth="5" fill="none" strokeLinecap="round" />{[14, 32, 45, 58, 76].map((x, i) => (<g key={i}><circle cx={x} cy={i % 2 ? 11 : 15} r="6" fill={i % 2 ? "#FFB6D2" : "#FFD6E8"} /><circle cx={x} cy={i % 2 ? 11 : 15} r="2.4" fill="#F6C453" /></g>))}</svg>),
+  tiara: () => (<svg className="td-sv td-twk" style={{ top: "-20%", left: "50%", transform: "translateX(-50%)", width: "56%" }} viewBox="0 0 64 34"><path d="M4 30 L10 10 L22 24 L32 4 L42 24 L54 10 L60 30 Z" fill="#F6C453" stroke="#E0A23B" strokeWidth="2" strokeLinejoin="round" /><circle cx="32" cy="12" r="3.4" fill="#FF6FA5" /><circle cx="13" cy="18" r="2.4" fill="#6EC5FF" /><circle cx="51" cy="18" r="2.4" fill="#8FE39B" /></svg>),
+  halo: () => (<svg className="td-sv td-halofloat" style={{ top: "-25%", left: "50%", transform: "translateX(-50%)", width: "52%" }} viewBox="0 0 60 18"><ellipse cx="30" cy="9" rx="26" ry="7" fill="none" stroke="#FFD874" strokeWidth="5" /><ellipse cx="30" cy="9" rx="26" ry="7" fill="none" stroke="#FFF3C4" strokeWidth="2" /></svg>),
+  blush: () => (<svg className="td-sv" style={{ top: "56%", left: "50%", transform: "translateX(-50%)", width: "78%" }} viewBox="0 0 90 20"><ellipse cx="16" cy="10" rx="11" ry="6" fill="#FF9FB0" opacity=".55" /><ellipse cx="74" cy="10" rx="11" ry="6" fill="#FF9FB0" opacity=".55" /></svg>),
+  glasses: () => (<svg className="td-sv" style={{ top: "46%", left: "50%", transform: "translateX(-50%)", width: "64%" }} viewBox="0 0 80 26"><circle cx="20" cy="13" r="11" fill="rgba(255,255,255,.22)" stroke="#5B4A3F" strokeWidth="3" /><circle cx="60" cy="13" r="11" fill="rgba(255,255,255,.22)" stroke="#5B4A3F" strokeWidth="3" /><path d="M31 13 Q40 7 49 13" stroke="#5B4A3F" strokeWidth="3" fill="none" /></svg>),
+  tie: () => (<svg className="td-sv" style={{ bottom: "-3%", left: "50%", transform: "translateX(-50%)", width: "34%" }} viewBox="0 0 40 22"><path d="M20 11 L4 3 Q1 2 1 6 L1 16 Q1 20 4 19 L20 11Z" fill="#E4568C" /><path d="M20 11 L36 3 Q39 2 39 6 L39 16 Q39 20 36 19 L20 11Z" fill="#E4568C" /><circle cx="20" cy="11" r="4" fill="#B03A6B" /></svg>),
+  scarf: () => (<svg className="td-sv" style={{ bottom: "-5%", left: "50%", transform: "translateX(-50%)", width: "92%" }} viewBox="0 0 100 32"><defs><pattern id="gschk" width="9" height="9" patternUnits="userSpaceOnUse"><rect width="4.5" height="9" fill="rgba(255,255,255,.4)" /></pattern></defs><path d="M6 8 Q50 22 94 8 L94 16 Q50 30 6 16 Z" fill="#D64550" /><path d="M6 8 Q50 22 94 8 L94 16 Q50 30 6 16 Z" fill="url(#gschk)" /><rect x="60" y="14" width="12" height="16" rx="3" fill="#D64550" /></svg>),
+  pearl: () => (<svg className="td-sv" style={{ bottom: "1%", left: "50%", transform: "translateX(-50%)", width: "68%" }} viewBox="0 0 80 22">{[0, 1, 2, 3, 4, 5, 6].map((i) => { const x = 10 + i * 10; const y = 7 + Math.sin((i / 6) * Math.PI) * 9; return <circle key={i} cx={x} cy={y} r="3.6" fill="#FDF6EC" stroke="#E0D2BE" strokeWidth="1" />; })}</svg>),
+  aurorascarf: () => (<svg className="td-sv td-hue" style={{ bottom: "-5%", left: "50%", transform: "translateX(-50%)", width: "92%" }} viewBox="0 0 100 26"><defs><linearGradient id="gsaur" x1="0" x2="1"><stop offset="0" stopColor="#8FD3FF" /><stop offset=".5" stopColor="#C9A6FF" /><stop offset="1" stopColor="#FF9EC1" /></linearGradient></defs><path d="M6 6 Q50 20 94 6 L94 15 Q50 29 6 15Z" fill="url(#gsaur)" /></svg>),
+};
+function ItemNode({ it }) {
+  if (!it) return null;
+  if (it.svg) { const C = SVGS[it.svg]; return C ? <C /> : null; }
+  if (it.pair) return (<><span className={"td-itm td-cheekL " + (it.cls || "")}>{it.e}</span><span className={"td-itm td-cheekR " + (it.cls || "")}>{it.e}</span></>);
+  if (it.e) return <span className={"td-itm td-itm-" + it.cat + (it.cls ? " " + it.cls : "")} style={it.st}>{it.e}</span>;
+  return null;
+}
+function AvatarDeco({ avatar, owned, tryOn, children, big }) {
+  const eq = { ...(avatar || {}), ...(tryOn || {}) };
+  const pick = (cat) => {
+    const id = eq[cat]; if (!id) return null;
+    const it = ITEMS_BY_ID[id]; if (!it) return null;
+    if (!(tryOn && tryOn[cat] === id) && owned && !owned.has(id)) return null;
+    return it;
+  };
+  const head = pick("head"), face = pick("face"), neck = pick("neck"), prop = pick("prop"), aura = pick("aura"), frame = pick("frame"), bg = pick("bg");
   const N = big ? 8 : 6;
   return (
-    <div className={"td-avatar frame-" + (av.frame || "none") + (big ? " big" : "")}>
+    <div className={"td-avatar frame-" + (frame ? frame.id : "none") + (big ? " big" : "") + (bg ? " hasbg" : "")}>
+      <div className="td-avatarinner">
+        {bg && <div className={"td-abg abg-" + bg.id}>{(bg.sp || []).map((s, i) => <span key={i} style={s.st}>{s.e}</span>)}</div>}
+        {children}
+        <ItemNode it={face} />
+        <ItemNode it={neck} />
+      </div>
+      <ItemNode it={head} />
+      <ItemNode it={prop} />
       {aura && (
-        <div className="td-aura">
-          {[...Array(N)].map((_, i) => (
-            <span key={i} style={{ "--i": i, "--n": N, "--dl": (i * 0.4) + "s" }}>{aura.e}</span>
-          ))}
+        <div className={"td-aura spd" + (aura.spd || 1)}>
+          {[...Array(N)].map((_, i) => <span key={i} style={{ "--i": i, "--n": N, "--dl": (i * 0.4) + "s" }}>{aura.ps[i % aura.ps.length]}</span>)}
         </div>
       )}
-      <div className="td-avatarinner">{children}</div>
-      {hat && <span className="td-hat">{hat.e}</span>}
+    </div>
+  );
+}
+function UnboxOverlay({ data, names, onClose, onOpened }) {
+  const [opened, setOpened] = useState(false);
+  const it = data.item;
+  return (
+    <div className="td-bigceleb" onClick={() => { if (opened) onClose(); }}>
+      {!opened ? (
+        <button className="td-unboxbox" onClick={(ev) => { ev.stopPropagation(); setOpened(true); if (onOpened) onOpened(); try { navigator.vibrate && navigator.vibrate([60, 40, 90]); } catch (e2) {} }}>🎁<span>탭해서 열기</span></button>
+      ) : (
+        <div className={"td-unboxreveal tier" + it.tier}>
+          <div className="td-unboxglow" />
+          <span className="td-unboxemoji">{it.icon || it.e || "🎀"}</span>
+          <h2>{it.name}</h2>
+          <p>{TIER_NAMES[it.tier]}{data.giftedBy ? ` · ${names[data.giftedBy]}의 선물 💝` : " 획득!"}</p>
+          {data.note && <p className="td-unboxnote">“{data.note}”</p>}
+          <span className="td-bigclose">화면을 탭하면 닫혀요</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -216,6 +311,13 @@ export default function Page() {
   const [letterInput, setLetterInput] = useState({ msg: "", date: "" });
   const [giftInput, setGiftInput] = useState("");
   const [openLetter, setOpenLetter] = useState(null);
+  const [inventory, setInventory] = useState([]);
+  const [styleSub, setStyleSub] = useState("closet");
+  const [shopCat, setShopCat] = useState("");
+  const [tryOn, setTryOn] = useState({});
+  const [unbox, setUnbox] = useState(null);
+  const [giftItem, setGiftItem] = useState(null);
+  const [giftNote, setGiftNote] = useState("");
   const [ledger, setLedger] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [redeems, setRedeems] = useState([]);
@@ -273,12 +375,13 @@ export default function Page() {
       if (initial) { setDays(nd); setGoals(ng); setLoading(false); }
       else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
       setLastSeen(ls);
-      const [{ data: mrows }, { data: crows }, { data: rrows }, { data: msgs }, { data: ans }] = await Promise.all([
+      const [{ data: mrows }, { data: crows }, { data: rrows }, { data: msgs }, { data: ans }, { data: inv }] = await Promise.all([
         supabase.rpc("gs_mileage_get", { p_code: code }),
         supabase.rpc("gs_catalog_get", { p_code: code }),
         supabase.rpc("gs_redeem_get", { p_code: code }),
         supabase.rpc("gs_msg_get", { p_code: code, p_me: me }),
         supabase.rpc("gs_qa_get", { p_code: code, p_me: me }),
+        supabase.rpc("gs_inventory_get", { p_code: code }),
       ]);
       if (!alive) return;
       if (mrows) setLedger(mrows);
@@ -286,6 +389,7 @@ export default function Page() {
       if (rrows) setRedeems(rrows);
       if (msgs) setMessages(msgs);
       if (ans) setAnswers(ans);
+      if (inv) setInventory(inv);
     };
     setLoading(true); load(true);
     const iv = setInterval(() => load(false), 10000);
@@ -424,6 +528,24 @@ export default function Page() {
     });
   };
   const saveAvatar = (patch) => saveGoal(me, { avatar: { ...(goals[me] && goals[me].avatar), ...patch } });
+  const reloadShopData = () => {
+    supabase.rpc("gs_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); });
+    supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+  };
+  const buyItem = (it) => {
+    supabase.rpc("gs_item_buy", { p_code: code, p_slot: me, p_item: it.id, p_price: it.price, p_title: it.name }).then(({ data: ok }) => {
+      if (ok) { reloadShopData(); setTryOn({}); saveAvatar({ [it.cat]: it.id }); setUnbox({ item: it }); }
+      else setRedeemMsg("포인트가 부족하거나 이미 보유 중이에요 🥲");
+    });
+  };
+  const sendItemGift = () => {
+    const it = giftItem; if (!it) return;
+    const pto = me === "a" ? "b" : "a";
+    supabase.rpc("gs_item_gift", { p_code: code, p_from: me, p_to: pto, p_item: it.id, p_price: it.price, p_title: `${it.icon} ${it.name}`, p_note: giftNote.trim() || null }).then(({ data: ok }) => {
+      if (ok) { setGiftItem(null); setGiftNote(""); reloadShopData(); setBigCeleb({ key: Date.now(), title: "선물 완료! 💝", sub: `${names[pto]}에게 ${it.name}을(를) 보냈어요` }); }
+      else setRedeemMsg("포인트가 부족하거나 상대가 이미 보유 중이에요 🥲");
+    });
+  };
 
   const addReward = () => {
     const title = newReward.title.trim(); const cost = parseInt(newReward.cost, 10);
@@ -611,6 +733,8 @@ export default function Page() {
   const partnerAns = answers.find((a) => a.qdate === today() && a.slot !== me);
   const inboxLetters = messages.filter((m) => m.kind === "letter" && m.to_slot === me && !m.opened);
   const recentCheers = messages.filter((m) => m.kind === "cheer" && m.to_slot === me).slice(0, 3);
+  const ownedSets = { a: new Set(inventory.filter(iv => iv.slot === "a").map(iv => iv.item_id)), b: new Set(inventory.filter(iv => iv.slot === "b").map(iv => iv.item_id)) };
+  const giftInbox = inventory.filter(iv => iv.slot === me && iv.gifted_by && !iv.gift_opened).map(iv => ({ item: ITEMS_BY_ID[iv.item_id], giftedBy: iv.gifted_by, note: iv.gift_note, invId: iv.id })).filter(x => x.item);
   const partner = me === "a" ? "b" : "a";
   const sortedCat = [...catalog].sort((x, y) => x.cost - y.cost);
   const nextGoal = sortedCat.find((c) => c.cost > myBal) || null;
@@ -745,7 +869,7 @@ export default function Page() {
               <text x="23" y="27" textAnchor="middle" fontSize="11" fill="var(--ink)" fontFamily="Jua">{ringDone}/{ringTotal}</text>
             </svg>
             <div className="td-buddywrap">
-              <AvatarDeco avatar={g.avatar} big>
+              <AvatarDeco avatar={g.avatar} owned={ownedSets[page]} big>
                 <div className={"td-buddy td-breathe lvl" + lvl + (viewedComplete ? " done" : "")}>
                   {page === "a" ? <FireBuddy mood={buddyMood} /> : <FairyBuddy />}
                   {lvl > 0 && <span className="td-spark s1">✨</span>}
@@ -988,18 +1112,6 @@ export default function Page() {
             </div>
           </div>
 
-          <div className="td-card td-decocard">
-            <h3 className="td-rewardh3">🎀 내 캐릭터 꾸미기</h3>
-            <div className="td-decopreview">
-              <AvatarDeco avatar={goals[me] && goals[me].avatar} big>
-                <div className="td-buddy">{me === "a" ? <FireBuddy mood="happy" /> : <FairyBuddy />}</div>
-              </AvatarDeco>
-            </div>
-            <div className="td-decogroup"><span className="td-decolabel">머리 장식</span><div className="td-decochips">{HATS.map((h) => <button key={h.id} className={"td-decochip" + ((goals[me] && goals[me].avatar && goals[me].avatar.hat || "") === h.id ? " on" : "")} onClick={() => saveAvatar({ hat: h.id })}>{h.e || "🚫"}</button>)}</div></div>
-            <div className="td-decogroup"><span className="td-decolabel">반짝임</span><div className="td-decochips">{AURAS.map((a) => <button key={a.id} className={"td-decochip" + ((goals[me] && goals[me].avatar && goals[me].avatar.aura || "") === a.id ? " on" : "")} onClick={() => saveAvatar({ aura: a.id })}>{a.e || "🚫"}</button>)}</div></div>
-            <div className="td-decogroup"><span className="td-decolabel">테두리</span><div className="td-decochips">{FRAMES.map((f) => <button key={f.id} className={"td-decochip td-framechip frame-" + (f.id || "none") + ((goals[me] && goals[me].avatar && goals[me].avatar.frame || "") === f.id ? " on" : "")} onClick={() => saveAvatar({ frame: f.id })}>{f.label}</button>)}</div></div>
-          </div>
-
           {redeems.filter((r) => r.requester !== me && r.status === "pending").length > 0 && (
             <div className="td-card td-incoming">
               <h3 className="td-rewardh3">💌 {names[partner]}이(가) 보낸 요청</h3>
@@ -1074,7 +1186,7 @@ export default function Page() {
             {ledger.filter((r) => r.slot === me).slice(0, 8).map((r) => (
               <div key={r.id} className="td-ledgerrow">
                 <span className="td-ledgerdate">{(r.ref_date || "").slice(5).replace("-", "/")}</span>
-                <span className="td-ledgerlabel">{r.reason.startsWith("redeem_") ? "🎁 리워드 교환" : (LEDGER_LABEL[r.reason] || r.reason)}</span>
+                <span className="td-ledgerlabel">{r.reason.startsWith("redeem_") ? "🎁 리워드 교환" : r.reason.startsWith("gift_to_") ? "💝 포인트 선물 보냄" : r.reason.startsWith("gift_from_") ? "💝 포인트 선물 받음" : r.reason.startsWith("giftitem_") ? "💝 아이템 선물" : r.reason.startsWith("item_") ? "🛍️ 아이템 구매" : (LEDGER_LABEL[r.reason] || r.reason)}</span>
                 <b className={r.delta > 0 ? "plus" : "minus"}>{r.delta > 0 ? "+" : ""}{r.delta}p</b>
               </div>
             ))}
@@ -1082,9 +1194,99 @@ export default function Page() {
           </div>
         </>)}
 
-                <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
+                {view === "style" && (<>
+          <div className="td-stylehero td-card">
+            <span className="td-stylebal">🪙 <CountUp value={myBal} />p</span>
+            <div className="td-stylepreview">
+              <AvatarDeco avatar={goals[me] && goals[me].avatar} owned={ownedSets[me]} tryOn={tryOn} big>
+                <div className="td-buddy" style={{ width: 118, height: 118 }}>{me === "a" ? <FireBuddy mood="happy" /> : <FairyBuddy />}</div>
+              </AvatarDeco>
+            </div>
+            {Object.keys(tryOn).length > 0 && (
+              <div className="td-tryonbar"><span>👀 입어보는 중이에요</span><button onClick={() => setTryOn({})}>원래대로</button></div>
+            )}
+            <div className="td-stylesubs">
+              {[["closet", "👗 옷장"], ["shop", "🛍️ 상점"]].map(([k, l]) => (
+                <button key={k} className={styleSub === k ? "on" : ""} onClick={() => { setStyleSub(k); setTryOn({}); }}>{l}</button>
+              ))}
+            </div>
+          </div>
+
+          {redeemMsg && <div className="td-pushmsg" onClick={() => setRedeemMsg("")}>{redeemMsg}</div>}
+
+          {giftInbox.length > 0 && (
+            <button className="td-letterbanner td-card" onClick={() => setUnbox(giftInbox[0])}>
+              <span className="td-lettericon">🎁</span>
+              <div><b>{names[giftInbox[0].giftedBy]}이(가) 보낸 선물이 도착했어요!</b><small>탭해서 열어보기</small></div>
+            </button>
+          )}
+
+          {styleSub === "closet" && (
+            <div className="td-card td-shopcard">
+              <h3 className="td-rewardh3">👗 내 옷장 <span className="td-ownedcnt">{inventory.filter((iv) => iv.slot === me).length}개 보유</span></h3>
+              {CATS.map(([cat, label]) => {
+                const mine2 = ITEMS.filter((it) => it.cat === cat && ownedSets[me].has(it.id));
+                const eqId = ((goals[me] && goals[me].avatar) || {})[cat] || "";
+                return (
+                  <div key={cat} className="td-closetrow">
+                    <span className="td-decolabel">{label}</span>
+                    <div className="td-decochips">
+                      <button className={"td-decochip" + (!eqId ? " on" : "")} onClick={() => saveAvatar({ [cat]: "" })}>🚫</button>
+                      {mine2.length === 0 && <span className="td-closetempty">상점에서 첫 아이템을 데려와봐요 →</span>}
+                      {mine2.map((it) => <button key={it.id} className={"td-decochip tier" + it.tier + (eqId === it.id ? " on" : "")} onClick={() => saveAvatar({ [cat]: it.id })}>{it.icon}</button>)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {styleSub === "shop" && (<>
+            <div className="td-shopfilter">
+              <button className={shopCat === "" ? "on" : ""} onClick={() => setShopCat("")}>전체</button>
+              {CATS.map(([c, l]) => <button key={c} className={shopCat === c ? "on" : ""} onClick={() => setShopCat(c)}>{l}</button>)}
+            </div>
+            <div className="td-shopgrid">
+              {ITEMS.filter((it) => !shopCat || it.cat === shopCat).map((it) => {
+                const own = ownedSets[me].has(it.id);
+                const can = myBal >= it.price;
+                const trying = tryOn[it.cat] === it.id;
+                const partnerOwn = ownedSets[me === "a" ? "b" : "a"].has(it.id);
+                return (
+                  <div key={it.id} className={"td-shopitem tier" + it.tier + (trying ? " trying" : "")}>
+                    <span className="td-tierbadge">{TIER_NAMES[it.tier]}</span>
+                    <button className="td-itempreview" onClick={() => setTryOn((s) => { const n = { ...s }; if (trying) delete n[it.cat]; else n[it.cat] = it.id; return n; })}>{it.icon}</button>
+                    <b className="td-itemname">{it.name}</b>
+                    <span className="td-itemprice">🪙 {it.price}p</span>
+                    {own ? <span className="td-ownedtag">✓ 보유 중</span> : (
+                      <div className="td-itembtns">
+                        <button className="td-buybtn" disabled={!can} onClick={() => buyItem(it)}>{can ? "구매" : `🔒 ${it.price - myBal}p`}</button>
+                        <button className="td-giftitembtn" disabled={!can || partnerOwn} onClick={() => setGiftItem(it)}>💝</button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <p className="td-shophint">아이템을 탭하면 미리 입어볼 수 있어요 👀</p>
+          </>)}
+        </>)}
+
+        <div className="td-foot"><span>{loading ? "동기화 중…" : "✓ 동기화 중(10초)"} · {code}</span><button onClick={logout}>코드 변경</button></div>
       </div>
 
+      {unbox && <UnboxOverlay data={unbox} names={names} onClose={() => setUnbox(null)} onOpened={() => { if (unbox.invId) supabase.rpc("gs_item_open", { p_code: code, p_id: unbox.invId }).then(() => supabase.rpc("gs_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); })); }} />}
+      {giftItem && (
+        <div className="td-letteropen" onClick={() => setGiftItem(null)}>
+          <div className="td-envelope" onClick={(ev) => ev.stopPropagation()}>
+            <div className="td-envtop">💝</div>
+            <div className="td-envfrom">{names[me === "a" ? "b" : "a"]}에게 선물하기</div>
+            <p className="td-envmsg">{giftItem.icon} {giftItem.name} · 🪙 {giftItem.price}p</p>
+            <input className="td-input" placeholder="짧은 메시지 (선택)" value={giftNote} onChange={(ev) => setGiftNote(ev.target.value)} />
+            <div style={{ marginTop: 14 }}><button className="td-envclose" onClick={sendItemGift}>선물 보내기 💝</button></div>
+          </div>
+        </div>
+      )}
       {openLetter && (
         <div className="td-letteropen" onClick={() => setOpenLetter(null)}>
           <div className="td-envelope" onClick={(e) => e.stopPropagation()}>
@@ -1108,7 +1310,7 @@ export default function Page() {
       {celebrate && <div className="td-confetti" key={celebrate.key}>{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "var(--c1)" : "var(--c2)" }} />)}<div className="td-celebmsg">{celebrate.msg}</div></div>}
 
       <nav className="td-bottomnav td-glasscard">
-        {[["today", "📝", "오늘"], ["review", "📊", "리뷰"], ["calendar", "🗓️", "캘린더"], ["reward", "🎁", "리워드"]].map(([v, ic, lb]) => (
+        {[["today", "📝", "오늘"], ["review", "📊", "리뷰"], ["calendar", "🗓️", "캘린더"], ["reward", "🎁", "리워드"], ["style", "🎀", "스타일"]].map(([v, ic, lb]) => (
           <button key={v} className={"td-navbtn" + (view === v ? " on" : "")} onClick={() => setView(v)}><span>{ic}</span>{lb}</button>
         ))}
       </nav>
@@ -1421,6 +1623,95 @@ const css = `
 .td-envfrom{ font-family:'Jua'; font-size:13px; color:var(--muted); margin:8px 0 14px; }
 .td-envmsg{ font-size:16px; line-height:1.6; color:var(--ink); margin:0 0 18px; white-space:pre-wrap; word-break:break-word; }
 .td-envclose{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:14px; padding:11px 28px; border-radius:999px; cursor:pointer; }
+/* 스타일샵 */
+.td-stylehero{ padding:16px; margin-bottom:12px; text-align:center; position:relative; }
+.td-stylebal{ position:absolute; top:12px; right:14px; font-family:'Jua'; font-size:13px; color:var(--c2); background:var(--soft2); padding:6px 12px; border-radius:999px; font-variant-numeric:tabular-nums; }
+.td-stylepreview{ display:flex; justify-content:center; padding:20px 0 8px; }
+.td-tryonbar{ display:flex; justify-content:center; gap:10px; align-items:center; font-family:'Jua'; font-size:12px; color:var(--c2); margin-top:8px; }
+.td-tryonbar button{ border:none; background:none; color:var(--muted); text-decoration:underline; font-size:12px; cursor:pointer; }
+.td-stylesubs{ display:flex; gap:6px; margin-top:14px; background:var(--soft2); border-radius:14px; padding:5px; }
+.td-stylesubs button{ flex:1; border:none; background:transparent; font-family:'Jua'; font-size:13px; padding:9px; border-radius:10px; color:var(--muted); cursor:pointer; }
+.td-stylesubs button.on{ background:var(--card); color:var(--ink); box-shadow:0 2px 8px var(--shadow); }
+.td-ownedcnt{ font-size:11px; color:var(--muted); font-family:'Gowun Dodum'; margin-left:6px; }
+.td-closetrow{ margin-bottom:13px; } .td-closetrow:last-child{ margin-bottom:0; }
+.td-closetempty{ font-size:12px; color:var(--muted); align-self:center; }
+.td-decochip.tier2{ border-color:#B9E8CC; } .td-decochip.tier3{ border-color:#D9C8F5; } .td-decochip.tier4{ border-color:#FFD874; }
+.td-shopfilter{ display:flex; gap:6px; overflow-x:auto; padding:2px 2px 10px; -webkit-overflow-scrolling:touch; scrollbar-width:none; }
+.td-shopfilter::-webkit-scrollbar{ display:none; }
+.td-shopfilter button{ flex:0 0 auto; border:none; background:var(--card); color:var(--muted); font-family:'Jua'; font-size:12px; padding:8px 13px; border-radius:999px; box-shadow:0 2px 6px var(--shadow); cursor:pointer; }
+.td-shopfilter button.on{ background:var(--c1); color:#fff; }
+.td-shopgrid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.td-shopitem{ position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; border-radius:18px; padding:24px 10px 12px; background:var(--card); box-shadow:0 3px 10px var(--shadow); border:2px solid var(--line); color:var(--ink); }
+.td-shopitem.tier2{ border-color:#B9E8CC; background:linear-gradient(170deg,#FDFFFE,#EAF8EF); color:#4A4038; }
+.td-shopitem.tier3{ border-color:#D9C8F5; background:linear-gradient(170deg,#FDFCFF,#F3EBFF); color:#4A4038; }
+.td-shopitem.tier4{ border-color:#FFD874; background:linear-gradient(150deg,#FFF9E8,#FFEFF7,#EAF4FF); background-size:200% 200%; animation:holoshine 4s ease infinite; color:#4A4038; }
+@keyframes holoshine{ 0%,100%{ background-position:0% 0%; } 50%{ background-position:100% 100%; } }
+.td-shopitem.trying{ outline:3px dashed var(--c1); outline-offset:2px; }
+.td-tierbadge{ position:absolute; top:8px; left:8px; font-family:'Jua'; font-size:9px; padding:2px 7px; border-radius:999px; background:var(--soft2); color:var(--muted); }
+.td-shopitem.tier2 .td-tierbadge{ background:#DFF3E6; color:#3DAE7B; }
+.td-shopitem.tier3 .td-tierbadge{ background:#EDE3FB; color:#8E6BC7; }
+.td-shopitem.tier4 .td-tierbadge{ background:linear-gradient(90deg,#FFE9A8,#FFD1E8); color:#B8860B; }
+.td-itempreview{ font-size:34px; background:none; border:none; cursor:pointer; line-height:1.2; padding:2px; }
+.td-itemname{ font-family:'Jua'; font-size:12.5px; text-align:center; min-height:32px; display:flex; align-items:center; color:inherit; }
+.td-itemprice{ font-family:'Jua'; font-size:12px; color:#8A7A66; background:rgba(255,255,255,.65); padding:2px 9px; border-radius:999px; }
+.td-itembtns{ display:flex; gap:5px; width:100%; margin-top:4px; }
+.td-buybtn{ flex:1; border:none; border-radius:10px; padding:8px 0; font-family:'Jua'; font-size:12px; color:#fff; background:var(--c1); cursor:pointer; }
+.td-buybtn:disabled{ background:var(--soft); color:var(--muted); cursor:default; }
+.td-giftitembtn{ width:36px; border:none; border-radius:10px; background:#FFD6E8; font-size:14px; cursor:pointer; }
+.td-giftitembtn:disabled{ opacity:.35; cursor:default; }
+.td-ownedtag{ font-family:'Jua'; font-size:11px; color:#3DAE7B; padding:8px 0 2px; }
+.td-shophint{ text-align:center; font-size:11px; color:var(--muted); margin:12px 0 0; }
+/* 아이템 레이어 */
+.td-sv{ position:absolute; z-index:4; pointer-events:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.td-itm{ position:absolute; z-index:4; pointer-events:none; filter:drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.td-itm-head{ top:-17%; left:50%; transform:translateX(-50%) rotate(-6deg); font-size:26px; }
+.td-avatar.big .td-itm-head{ font-size:32px; }
+.td-itm-prop{ bottom:-8%; right:-16%; font-size:24px; }
+.td-avatar.big .td-itm-prop{ font-size:30px; }
+.td-itm-face{ top:46%; left:50%; transform:translateX(-50%); font-size:16px; }
+.td-itm-neck{ bottom:0%; left:50%; transform:translateX(-50%); font-size:18px; }
+.td-cheekL{ top:56%; left:18%; font-size:11px; } .td-cheekR{ top:56%; right:18%; font-size:11px; }
+.td-avatar.big .td-cheekL,.td-avatar.big .td-cheekR{ font-size:14px; }
+.td-twk{ animation:twinkle 1.6s ease-in-out infinite; }
+.td-beat{ animation:heartbeat 1.2s ease-in-out infinite; }
+@keyframes heartbeat{ 0%,100%{ transform:scale(1); } 30%{ transform:scale(1.28); } }
+.td-glow{ filter:drop-shadow(0 0 8px #FFC46B) drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.td-halofloat{ animation:halofloat 2.4s ease-in-out infinite; }
+@keyframes halofloat{ 0%,100%{ transform:translateX(-50%) translateY(0); } 50%{ transform:translateX(-50%) translateY(-4px); } }
+.td-hue{ animation:hueanim 5s linear infinite; }
+@keyframes hueanim{ to{ filter:hue-rotate(360deg) drop-shadow(0 2px 3px rgba(0,0,0,.18)); } }
+.td-aura.spd2 span{ animation-duration:3.2s; }
+/* 배경 */
+.td-abg{ position:absolute; inset:0; border-radius:50%; overflow:hidden; z-index:0; }
+.td-abg span{ position:absolute; }
+.td-avatar.hasbg .td-buddy{ background:transparent; position:relative; z-index:1; }
+.abg-b_pastel{ background:linear-gradient(160deg,#FFE9F3,#E3F2FF); }
+.abg-b_cloud{ background:linear-gradient(180deg,#BFE3FF,#EAF6FF); }
+.abg-b_sunset{ background:linear-gradient(180deg,#FFB37A,#FF7FA2); }
+.abg-b_sakura{ background:linear-gradient(180deg,#FFDDEB,#FFF0F6); }
+.abg-b_night{ background:linear-gradient(180deg,#20224E,#3A2E63); }
+.abg-b_aurora{ background:linear-gradient(120deg,#143054,#1E4D5C,#3C2A63,#143054); background-size:300% 300%; animation:aurorabg 8s ease infinite; }
+@keyframes aurorabg{ 0%,100%{ background-position:0% 50%; } 50%{ background-position:100% 50%; } }
+/* 프레임 */
+.td-avatar.frame-fr_pink .td-avatarinner{ box-shadow:0 0 0 4px #FFC2D6; border-radius:50%; }
+.td-avatar.frame-fr_mint .td-avatarinner{ box-shadow:0 0 0 4px #B9E8CC; border-radius:50%; }
+.td-avatar.frame-fr_lav .td-avatarinner{ box-shadow:0 0 0 4px #D9C8F5; border-radius:50%; }
+.td-avatar.frame-fr_gold .td-avatarinner{ box-shadow:0 0 0 4px #FFD874, 0 0 14px rgba(255,200,80,.55); border-radius:50%; }
+.td-avatar.frame-fr_rose .td-avatarinner{ box-shadow:0 0 0 4px #F4B8A8, 0 0 12px rgba(244,150,130,.5); border-radius:50%; }
+.td-avatar.frame-fr_lace .td-avatarinner{ outline:3px dashed #fff; outline-offset:3px; box-shadow:0 0 0 3px rgba(255,255,255,.6); border-radius:50%; }
+.td-avatar.frame-fr_neon .td-avatarinner{ box-shadow:0 0 0 3px #6EE7FF, 0 0 18px #6EE7FF; border-radius:50%; }
+.td-avatar.frame-fr_holo .td-avatarinner{ border:4px solid transparent; border-radius:50%; background:linear-gradient(var(--card),var(--card)) padding-box, conic-gradient(from 0deg,#FF8A80,#FFD180,#FFFF8D,#B9F6CA,#84FFFF,#B388FF,#FF8A80) border-box; }
+/* 언박싱 */
+.td-unboxbox{ position:relative; z-index:1; background:none; border:none; font-size:84px; cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:12px; animation:boxshake 1.1s ease-in-out infinite; }
+.td-unboxbox span{ font-size:13px; color:rgba(255,255,255,.7); font-family:'Jua'; }
+@keyframes boxshake{ 0%,100%{ transform:rotate(0); } 20%{ transform:rotate(-6deg) scale(1.03); } 40%{ transform:rotate(6deg); } 60%{ transform:rotate(-3deg); } 80%{ transform:rotate(3deg); } }
+.td-unboxreveal{ position:relative; display:flex; flex-direction:column; align-items:center; z-index:1; animation:pop .5s ease; }
+.td-unboxemoji{ font-size:72px; filter:drop-shadow(0 6px 18px rgba(255,255,255,.35)); }
+.td-unboxreveal h2{ font-family:'Jua'; color:#fff; font-size:22px; margin:12px 0 4px; }
+.td-unboxreveal p{ color:rgba(255,255,255,.85); margin:0; font-size:13px; }
+.td-unboxnote{ margin-top:10px !important; font-size:14px !important; color:#FFE3EE !important; }
+.td-unboxglow{ position:absolute; inset:-70px; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.28), transparent 70%); z-index:-1; }
+.td-unboxreveal.tier4 .td-unboxglow{ background:conic-gradient(#FF8A80,#FFD180,#FFFF8D,#B9F6CA,#84FFFF,#B388FF,#FF8A80); filter:blur(34px); opacity:.5; animation:spinslow 8s linear infinite; }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
