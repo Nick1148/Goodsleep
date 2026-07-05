@@ -441,8 +441,9 @@ export default function Page() {
   useEffect(() => {
     if (!code || loading || !me) return;
     const en = days[today()]?.[me];
-    if (isCompleteEntry(me, en)) award(me, POINTS.full, "daily", today());
-    else if (hasEntry(en)) award(me, POINTS.partial, "daily", today());
+    const kissAward = (delta, reason, rd) => supabase.rpc("gs_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
+    if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", today()); kissAward(POINTS.full, "daily", today()); }
+    else if (hasEntry(en)) { award(me, POINTS.partial, "daily", today()); kissAward(POINTS.partial, "daily", today()); }
 
     if (new Date().getDay() === 0) {
       const wk = weekDates(today());
@@ -576,17 +577,17 @@ export default function Page() {
     supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
   };
   const buyItem = (it) => {
-    supabase.rpc("gs_item_buy", { p_code: code, p_slot: me, p_item: it.id, p_price: it.price, p_title: it.name }).then(({ data: ok }) => {
+    supabase.rpc("gs_item_buy_kiss", { p_code: code, p_slot: me, p_item: it.id, p_price: it.price }).then(({ data: ok }) => {
       if (ok) { reloadShopData(); setTryOn({}); saveAvatar({ [it.cat]: it.id }); setUnbox({ item: it }); }
-      else setRedeemMsg("포인트가 부족하거나 이미 보유 중이에요 🥲");
+      else setRedeemMsg("뽀뽀가 부족하거나 이미 보유 중이에요 🥲");
     });
   };
   const sendItemGift = () => {
     const it = giftItem; if (!it) return;
     const pto = me === "a" ? "b" : "a";
-    supabase.rpc("gs_item_gift", { p_code: code, p_from: me, p_to: pto, p_item: it.id, p_price: it.price, p_title: `${it.icon} ${it.name}`, p_note: giftNote.trim() || null }).then(({ data: ok }) => {
+    supabase.rpc("gs_item_gift_kiss", { p_code: code, p_from: me, p_to: pto, p_item: it.id, p_price: it.price, p_title: `${it.icon} ${it.name}`, p_note: giftNote.trim() || null }).then(({ data: ok }) => {
       if (ok) { setGiftItem(null); setGiftNote(""); reloadShopData(); setBigCeleb({ key: Date.now(), title: "선물 완료! 💝", sub: `${names[pto]}에게 ${it.name}을(를) 보냈어요` }); }
-      else setRedeemMsg("포인트가 부족하거나 상대가 이미 보유 중이에요 🥲");
+      else setRedeemMsg("뽀뽀가 부족하거나 상대가 이미 보유 중이에요 🥲");
     });
   };
   const GACHA_COST = 20, GACHA_COST10 = 180;
@@ -594,13 +595,13 @@ export default function Page() {
   const doGacha = (count) => {
     if (gachaRolling) return;
     const cost = count === 10 ? GACHA_COST10 : GACHA_COST;
-    if (myBal < cost) { setRedeemMsg("포인트가 부족해요 🥲"); return; }
+    if (myKiss < cost) { setRedeemMsg("뽀뽀가 부족해요 🥲"); return; }
     setGachaRolling(true); setGachaResult(null);
     const results = [];
     const run = async () => {
       for (let i = 0; i < count; i++) {
         const guarantee = (count === 10 && i === 9) ? 3 : null; // 10연차 마지막은 에픽↑ 보장
-        const { data } = await supabase.rpc("gs_gacha", { p_code: code, p_slot: me, p_cost: cost / count, p_pool: gachaPool, p_guarantee: guarantee });
+        const { data } = await supabase.rpc("gs_gacha_kiss", { p_code: code, p_slot: me, p_cost: cost / count, p_pool: gachaPool, p_guarantee: guarantee });
         if (data && data.ok) results.push(data); else { break; }
       }
       const [{ data: inv }, { data: mrows }] = await Promise.all([
@@ -793,9 +794,14 @@ export default function Page() {
   const myCat = quoteCategory(me);
   const myQuote = QUOTES[me][myCat][dayOfYear(today()) % QUOTES[me][myCat].length];
   const mine = page === me;
-  const balA = ledger.filter((r) => r.slot === "a").reduce((s, r) => s + r.delta, 0);
-  const balB = ledger.filter((r) => r.slot === "b").reduce((s, r) => s + r.delta, 0);
+  const isMile = (r) => (r.currency || "mile") === "mile";
+  const isKiss = (r) => r.currency === "kiss";
+  const balA = ledger.filter((r) => r.slot === "a" && isMile(r)).reduce((s, r) => s + r.delta, 0);
+  const balB = ledger.filter((r) => r.slot === "b" && isMile(r)).reduce((s, r) => s + r.delta, 0);
   const myBal = me === "a" ? balA : balB;
+  const kissA = ledger.filter((r) => r.slot === "a" && isKiss(r)).reduce((s, r) => s + r.delta, 0);
+  const kissB = ledger.filter((r) => r.slot === "b" && isKiss(r)).reduce((s, r) => s + r.delta, 0);
+  const myKiss = me === "a" ? kissA : kissB;
   const todayQ = COUPLE_Q[dayOfYear(today()) % COUPLE_Q.length];
   const myAns = answers.find((a) => a.qdate === today() && a.slot === me);
   const partnerAns = answers.find((a) => a.qdate === today() && a.slot !== me);
@@ -876,7 +882,7 @@ export default function Page() {
         <div className="td-topbar">
           <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}</span>
           <div className="td-topbtns">
-            <span className="td-milebadge" onClick={() => setView("reward")}>🪙 <CountUp value={myBal} /></span>
+            <span className="td-milebadge" onClick={() => setView(view === "style" ? "style" : "reward")}>{view === "style" ? <>💋 <CountUp value={myKiss} /></> : <>🪙 <CountUp value={myBal} /></>}</span>
             <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
             <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
           </div>
@@ -1251,7 +1257,7 @@ export default function Page() {
 
           <div className="td-card td-shopcard">
             <h3 className="td-rewardh3">🧾 나의 적립 내역</h3>
-            {ledger.filter((r) => r.slot === me).slice(0, 8).map((r) => (
+            {ledger.filter((r) => r.slot === me && isMile(r)).slice(0, 8).map((r) => (
               <div key={r.id} className="td-ledgerrow">
                 <span className="td-ledgerdate">{(r.ref_date || "").slice(5).replace("-", "/")}</span>
                 <span className="td-ledgerlabel">{r.reason.startsWith("redeem_") ? "🎁 리워드 교환" : r.reason.startsWith("gift_to_") ? "💝 포인트 선물 보냄" : r.reason.startsWith("gift_from_") ? "💝 포인트 선물 받음" : r.reason.startsWith("giftitem_") ? "💝 아이템 선물" : r.reason.startsWith("item_") ? "🛍️ 아이템 구매" : (LEDGER_LABEL[r.reason] || r.reason)}</span>
@@ -1265,7 +1271,7 @@ export default function Page() {
                 {view === "style" && (<>
           {!styleMine && <div className="td-viewonly">👀 {names[page]}의 캐릭터를 구경하고 있어요</div>}
           <div className="td-stylehero td-card">
-            <span className="td-stylebal">🪙 <CountUp value={myBal} />p</span>
+            <span className="td-stylebal td-kissbal">💋 <CountUp value={myKiss} /></span>
             <div className="td-stylepreview">
               <AvatarDeco avatar={goals[page] && goals[page].avatar} owned={ownedSets[page]} tryOn={styleMine ? tryOn : {}} big>
                 <div className="td-buddy" style={{ width: 118, height: 118 }}>{page === "a" ? <FireBuddy mood="happy" /> : <FairyBuddy />}</div>
@@ -1274,6 +1280,7 @@ export default function Page() {
             {styleMine && Object.keys(tryOn).length > 0 && (
               <div className="td-tryonbar"><span>👀 입어보는 중이에요</span><button onClick={() => setTryOn({})}>원래대로</button></div>
             )}
+            {styleMine && <p className="td-kisshint">💋 뽀뽀는 매일 기록하면 마일리지와 함께 쌓여요 (꾸미기 전용)</p>}
             {styleMine ? (
               <div className="td-stylesubs">
                 {[["closet", "👗 옷장"], ["shop", "🛍️ 상점"], ["gacha", "🎰 뽑기"]].map(([k, l]) => (
@@ -1321,7 +1328,7 @@ export default function Page() {
             <div className="td-shopgrid">
               {ITEMS.filter((it) => !shopCat || it.cat === shopCat).map((it) => {
                 const own = ownedSets[me].has(it.id);
-                const can = myBal >= it.price;
+                const can = myKiss >= it.price;
                 const trying = tryOn[it.cat] === it.id;
                 const partnerOwn = ownedSets[me === "a" ? "b" : "a"].has(it.id);
                 return (
@@ -1329,10 +1336,10 @@ export default function Page() {
                     <span className="td-tierbadge">{TIER_NAMES[it.tier]}</span>
                     <button className="td-itempreview" onClick={() => setTryOn((s) => { const n = { ...s }; if (trying) delete n[it.cat]; else n[it.cat] = it.id; return n; })}>{it.icon}</button>
                     <b className="td-itemname">{it.name}</b>
-                    <span className="td-itemprice">🪙 {it.price}p</span>
+                    <span className="td-itemprice">💋 {it.price}</span>
                     {own ? <span className="td-ownedtag">✓ 보유 중</span> : (
                       <div className="td-itembtns">
-                        <button className="td-buybtn" disabled={!can} onClick={() => buyItem(it)}>{can ? "구매" : `🔒 ${it.price - myBal}p`}</button>
+                        <button className="td-buybtn" disabled={!can} onClick={() => buyItem(it)}>{can ? "구매" : `🔒 ${it.price - myKiss}`}</button>
                         <button className="td-giftitembtn" disabled={!can || partnerOwn} onClick={() => setGiftItem(it)}>💝</button>
                       </div>
                     )}
@@ -1347,13 +1354,13 @@ export default function Page() {
             <div className="td-card td-gachacard">
               <div className="td-gachamachine"><span className="td-gachaball">{gachaRolling ? "🎲" : "🎁"}</span></div>
               <h3 className="td-gachatitle">🎰 랜덤 뽑기</h3>
-              <p className="td-gachadesc">뭘 뽑아도 아이템은 나와요! 이미 가진 등급이면 포인트로 일부 환급, 가끔 <b>잭팟(2배 환급)</b>도 떠요 ✨</p>
+              <p className="td-gachadesc">뭘 뽑아도 아이템은 나와요! 이미 가진 등급이면 뽀뽀 일부 환급, 가끔 <b>잭팟(2배 환급)</b>도 떠요 ✨</p>
               <div className="td-gacharates">
                 <span>⚪ 베이직 55%</span><span>🌿 레어 30%</span><span>💜 에픽 12%</span><span>🌟 레전 3%</span>
               </div>
               <div className="td-gachabtns">
-                <button className="td-gachabtn" disabled={gachaRolling || myBal < 20} onClick={() => doGacha(1)}>1회 뽑기<b>🪙 20p</b></button>
-                <button className="td-gachabtn big" disabled={gachaRolling || myBal < 180} onClick={() => doGacha(10)}>10연차<b>🪙 180p</b><small>마지막 에픽↑ 보장</small></button>
+                <button className="td-gachabtn" disabled={gachaRolling || myKiss < 20} onClick={() => doGacha(1)}>1회 뽑기<b>💋 20</b></button>
+                <button className="td-gachabtn big" disabled={gachaRolling || myKiss < 180} onClick={() => doGacha(10)}>10연차<b>💋 180</b><small>마지막 에픽↑ 보장</small></button>
               </div>
             </div>
           )}
@@ -1372,8 +1379,8 @@ export default function Page() {
                 <div key={i} className={"td-gachaitem tier" + (r.tier || 1) + (r.dupe ? " dupe" : "")}>
                   <span className="td-gachaemoji">{r.dupe ? "🔁" : (r.item ? (r.item.icon || r.item.e) : "🎁")}</span>
                   <b>{r.dupe ? "중복" : (r.item ? r.item.name : "")}</b>
-                  {r.dupe ? <small>+{r.refund}p 환급</small> : <small>{TIER_NAMES[r.tier]}</small>}
-                  {r.jackpot && <span className="td-jackpot">💰 잭팟! +{r.jackpotAmt}p</span>}
+                  {r.dupe ? <small>+{r.refund}💋 환급</small> : <small>{TIER_NAMES[r.tier]}</small>}
+                  {r.jackpot && <span className="td-jackpot">💰 잭팟! +{r.jackpotAmt}💋</span>}
                 </div>
               ))}
             </div>
@@ -1388,7 +1395,7 @@ export default function Page() {
           <div className="td-envelope" onClick={(ev) => ev.stopPropagation()}>
             <div className="td-envtop">💝</div>
             <div className="td-envfrom">{names[me === "a" ? "b" : "a"]}에게 선물하기</div>
-            <p className="td-envmsg">{giftItem.icon} {giftItem.name} · 🪙 {giftItem.price}p</p>
+            <p className="td-envmsg">{giftItem.icon} {giftItem.name} · 💋 {giftItem.price}</p>
             <input className="td-input" placeholder="짧은 메시지 (선택)" value={giftNote} onChange={(ev) => setGiftNote(ev.target.value)} />
             <div style={{ marginTop: 14 }}><button className="td-envclose" onClick={sendItemGift}>선물 보내기 💝</button></div>
           </div>
@@ -1733,6 +1740,8 @@ const css = `
 /* 스타일샵 */
 .td-stylehero{ padding:16px; margin-bottom:12px; text-align:center; position:relative; }
 .td-stylebal{ position:absolute; top:12px; right:14px; font-family:'Jua'; font-size:13px; color:var(--c2); background:var(--soft2); padding:6px 12px; border-radius:999px; font-variant-numeric:tabular-nums; }
+.td-kissbal{ background:linear-gradient(90deg,#FFE0EC,#FFD0E4); color:#D6488A; }
+.td-kisshint{ font-size:11px; color:var(--muted); text-align:center; margin:10px 8px 0; line-height:1.5; }
 .td-stylepreview{ display:flex; justify-content:center; padding:20px 0 8px; }
 .td-tryonbar{ display:flex; justify-content:center; gap:10px; align-items:center; font-family:'Jua'; font-size:12px; color:var(--c2); margin-top:8px; }
 .td-tryonbar button{ border:none; background:none; color:var(--muted); text-decoration:underline; font-size:12px; cursor:pointer; }
