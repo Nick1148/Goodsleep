@@ -461,6 +461,37 @@ export default function Page() {
     supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
   };
 
+  // ---- 이메일/비밀번호 (앱 전용 계정) ----
+  const [authMode, setAuthMode] = useState("signin"); // signin | signup
+  const [emailInput, setEmailInput] = useState("");
+  const [pwInput, setPwInput] = useState("");
+  const [pw2Input, setPw2Input] = useState("");
+  const [authMsg, setAuthMsg] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [showLegacy, setShowLegacy] = useState(false);
+
+  const emailAuth = async () => {
+    const em = emailInput.trim(); const pw = pwInput;
+    if (!em || !pw) { setAuthMsg("이메일과 비밀번호를 입력해주세요."); return; }
+    if (authMode === "signup") {
+      if (pw.length < 6) { setAuthMsg("비밀번호는 6자 이상이어야 해요."); return; }
+      if (pw !== pw2Input) { setAuthMsg("비밀번호가 서로 달라요."); return; }
+    }
+    setAuthBusy(true); setAuthMsg("");
+    if (authMode === "signup") {
+      const { data, error } = await supabase.auth.signUp({ email: em, password: pw });
+      setAuthBusy(false);
+      if (error) { setAuthMsg(error.message.includes("already registered") ? "이미 가입된 이메일이에요. 로그인해주세요." : "가입에 실패했어요: " + error.message); return; }
+      if (data.session) { setSession(data.session); }
+      else { setAuthMsg("확인 메일을 보냈어요! 메일함에서 인증 후 로그인해주세요."); setAuthMode("signin"); }
+    } else {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: em, password: pw });
+      setAuthBusy(false);
+      if (error) { setAuthMsg(error.message.includes("Invalid login") ? "이메일 또는 비밀번호가 틀렸어요." : error.message.includes("not confirmed") ? "메일 인증이 아직 안 됐어요. 메일함을 확인해주세요." : "로그인에 실패했어요."); return; }
+      setSession(data.session);
+    }
+  };
+
   const linkCouple = async () => {
     const c = linkCodeInput.trim();
     if (!c) return;
@@ -478,6 +509,16 @@ export default function Page() {
   };
 
   const logoutAuth = async () => { await supabase.auth.signOut(); setSession(null); logout(); };
+
+  const createCouple = async () => {
+    setLinking(true); setLinkMsg("");
+    const { data, error } = await supabase.rpc("gs2_create_couple", { p_slot: linkSlotInput });
+    setLinking(false);
+    if (error || !data || !data.ok) { setLinkMsg(data && data.reason === "already_linked" ? "이미 연결된 계정이에요." : "커플 생성에 실패했어요."); return; }
+    try { localStorage.setItem(LS_CODE, data.couple_code); localStorage.setItem(LS_ME, data.slot); } catch (e) {}
+    setCode(data.couple_code); setMe(data.slot); setPage(data.slot);
+    alert("커플 코드가 만들어졌어요: " + data.couple_code + "\n연인에게 이 코드를 공유해주세요!");
+  };
 
   useEffect(() => {
     try {
@@ -519,7 +560,7 @@ export default function Page() {
       return { nd, ng, ls };
     };
     const load = async (initial) => {
-      const { data: rows, error } = await supabase.rpc("gs_get", { p_code: code });
+      const { data: rows, error } = await supabase.rpc("gs2_get", { p_code: code });
       if (!alive) return;
       if (error) { if (initial) setLoading(false); return; }
       const { nd, ng, ls } = parseRows(rows);
@@ -529,12 +570,12 @@ export default function Page() {
       else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
       setLastSeen(ls);
       const [{ data: mrows }, { data: crows }, { data: rrows }, { data: msgs }, { data: ans }, { data: inv }] = await Promise.all([
-        supabase.rpc("gs_mileage_get", { p_code: code }),
-        supabase.rpc("gs_catalog_get", { p_code: code }),
-        supabase.rpc("gs_redeem_get", { p_code: code }),
+        supabase.rpc("gs2_mileage_get", { p_code: code }),
+        supabase.rpc("gs2_catalog_get", { p_code: code }),
+        supabase.rpc("gs2_redeem_get", { p_code: code }),
         supabase.rpc("gs2_msg_get", { p_code: code, p_me: me }),
         supabase.rpc("gs2_qa_get", { p_code: code, p_me: me }),
-        supabase.rpc("gs_inventory_get", { p_code: code }),
+        supabase.rpc("gs2_inventory_get", { p_code: code }),
       ]);
       if (!alive) return;
       if (mrows) setLedger(mrows);
@@ -553,7 +594,7 @@ export default function Page() {
   useEffect(() => {
     if (!code || loading || !me) return;
     const en = days[today()]?.[me];
-    const kissAward = (delta, reason, rd) => supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
+    const kissAward = (delta, reason, rd) => supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
     if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", today()); kissAward(POINTS.full, "daily", today()); }
     else if (hasEntry(en)) { award(me, POINTS.partial, "daily", today()); kissAward(POINTS.partial, "daily", today()); }
 
@@ -636,7 +677,7 @@ export default function Page() {
   const updateEntry = (slot, patch) => { if (slot !== me) return; setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; }); };
   const award = (slot, delta, reason, refDate) => {
     supabase.rpc("gs2_mileage_award", { p_code: code, p_slot: slot, p_delta: delta, p_reason: reason, p_ref_date: refDate }).then(() => {
-      supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+      supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
     });
   };
   const trackMealsFor = (slot) => { const gg = goals[slot] || {}; return gg.trackMeals !== undefined ? !!gg.trackMeals : slot === "b"; };
@@ -673,12 +714,12 @@ export default function Page() {
     if (!letterInput.msg.trim() || !letterInput.date) { setRedeemMsg("쪽지 내용과 배달 날짜를 정해줘요."); return; }
     supabase.rpc("gs2_msg_send", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_kind: "letter", p_message: letterInput.msg.trim(), p_deliver: letterInput.date }).then(() => { setLetterInput({ msg: "", date: "" }); reloadSocial(); fireCelebrate("쪽지를 숨겨뒀어요 💌"); });
   };
-  const openMessage = (m) => { supabase.rpc("gs_msg_open", { p_code: code, p_id: m.id }).then(reloadSocial); setOpenLetter(m); };
+  const openMessage = (m) => { supabase.rpc("gs2_msg_open", { p_code: code, p_id: m.id }).then(reloadSocial); setOpenLetter(m); };
   const sendGift = () => {
     const amt = parseInt(giftInput, 10);
     if (!amt || amt <= 0) { setRedeemMsg("선물할 포인트를 입력해줘요."); return; }
     supabase.rpc("gs2_mileage_gift", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_amount: amt }).then(({ data: ok }) => {
-      if (ok) { setGiftInput(""); setBigCeleb({ key: Date.now(), title: `${amt}p 선물 완료! 💝`, sub: `${names[me === "a" ? "b" : "a"]}에게 마음을 보냈어요` }); supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }); reloadSocial(); }
+      if (ok) { setGiftInput(""); setBigCeleb({ key: Date.now(), title: `${amt}p 선물 완료! 💝`, sub: `${names[me === "a" ? "b" : "a"]}에게 마음을 보냈어요` }); supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }); reloadSocial(); }
       else setRedeemMsg("포인트가 부족해요 🥲");
     });
   };
@@ -686,8 +727,8 @@ export default function Page() {
   const styleTarget = page; // 스타일 탭은 상단 a/b 탭을 따름
   const styleMine = page === me;
   const reloadShopData = () => {
-    supabase.rpc("gs_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); });
-    supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+    supabase.rpc("gs2_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); });
+    supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
   };
   const buyItem = (it) => {
     supabase.rpc("gs2_item_buy_kiss", { p_code: code, p_slot: me, p_item: it.id }).then(({ data: ok }) => {
@@ -718,8 +759,8 @@ export default function Page() {
         if (data && data.ok) results.push(data); else { break; }
       }
       const [{ data: inv }, { data: mrows }] = await Promise.all([
-        supabase.rpc("gs_inventory_get", { p_code: code }),
-        supabase.rpc("gs_mileage_get", { p_code: code }),
+        supabase.rpc("gs2_inventory_get", { p_code: code }),
+        supabase.rpc("gs2_mileage_get", { p_code: code }),
       ]);
       if (inv) setInventory(inv); if (mrows) setLedger(mrows);
       setGachaRolling(false);
@@ -732,37 +773,37 @@ export default function Page() {
   const addReward = () => {
     const title = newReward.title.trim(); const cost = parseInt(newReward.cost, 10);
     if (!title || !cost || cost <= 0) { setRedeemMsg("이름과 가격을 입력해줘요."); return; }
-    supabase.rpc("gs_catalog_add", { p_code: code, p_slot: me, p_title: title, p_emoji: newReward.emoji || "🎁", p_cost: cost }).then(() => {
-      supabase.rpc("gs_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
+    supabase.rpc("gs2_catalog_add", { p_code: code, p_slot: me, p_title: title, p_emoji: newReward.emoji || "🎁", p_cost: cost }).then(() => {
+      supabase.rpc("gs2_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
       setNewReward({ emoji: "🎁", title: "", cost: "" });
     });
   };
   const seedDefaults = async () => {
     for (const r of DEFAULT_REWARDS) {
-      await supabase.rpc("gs_catalog_add", { p_code: code, p_slot: me, p_title: r.title, p_emoji: r.emoji, p_cost: r.cost });
+      await supabase.rpc("gs2_catalog_add", { p_code: code, p_slot: me, p_title: r.title, p_emoji: r.emoji, p_cost: r.cost });
     }
-    const { data } = await supabase.rpc("gs_catalog_get", { p_code: code });
+    const { data } = await supabase.rpc("gs2_catalog_get", { p_code: code });
     if (data) setCatalog(data);
     fireCelebrate("💝 추천 리워드가 담겼어요!");
   };
   const deleteReward = (id) => {
-    supabase.rpc("gs_catalog_delete", { p_code: code, p_id: id }).then(() => {
-      supabase.rpc("gs_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
+    supabase.rpc("gs2_catalog_delete", { p_code: code, p_id: id }).then(() => {
+      supabase.rpc("gs2_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
     });
   };
   const doRedeem = (item) => {
-    supabase.rpc("gs_redeem", { p_code: code, p_slot: me, p_catalog_id: item.id }).then(({ data: ok }) => {
+    supabase.rpc("gs2_redeem", { p_code: code, p_slot: me, p_catalog_id: item.id }).then(({ data: ok }) => {
       if (ok) {
         const isFirst = redeems.filter((r) => r.requester === me).length === 0;
         if (isFirst) { setBigCeleb({ key: Date.now(), title: "첫 리워드 교환! 🎁", sub: `${item.title} — 곧 만나요` }); try { navigator.vibrate && navigator.vibrate([80, 40, 120]); } catch (e2) {} }
         else fireCelebrate(`${item.emoji} ${item.title} 교환 완료!`);
-        Promise.all([supabase.rpc("gs_mileage_get", { p_code: code }), supabase.rpc("gs_redeem_get", { p_code: code })]).then(([m, r]) => { if (m.data) setLedger(m.data); if (r.data) setRedeems(r.data); });
+        Promise.all([supabase.rpc("gs2_mileage_get", { p_code: code }), supabase.rpc("gs2_redeem_get", { p_code: code })]).then(([m, r]) => { if (m.data) setLedger(m.data); if (r.data) setRedeems(r.data); });
       } else setRedeemMsg("마일리지가 부족해요 🥲");
     });
   };
   const confirmRedeem = (id) => {
-    supabase.rpc("gs_redeem_confirm", { p_code: code, p_id: id }).then(() => {
-      supabase.rpc("gs_redeem_get", { p_code: code }).then(({ data }) => { if (data) setRedeems(data); });
+    supabase.rpc("gs2_redeem_confirm", { p_code: code, p_id: id }).then(() => {
+      supabase.rpc("gs2_redeem_get", { p_code: code }).then(({ data }) => { if (data) setRedeems(data); });
     });
   };
 
@@ -772,7 +813,7 @@ export default function Page() {
     if (pushState === "denied") { setPushMsg("브라우저/기기 설정에서 이 사이트의 알림 권한을 허용으로 바꿔주세요."); return; }
     if (pushState === "on") {
       setPushState("busy");
-      try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); await supabase.rpc("gs_delete_sub", { p_code: code, p_slot: me }); } catch (e) {}
+      try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); await supabase.rpc("gs2_delete_sub", { p_code: code, p_slot: me }); } catch (e) {}
       setPushState("off"); setPushMsg("알림을 껐어요.");
       return;
     }
@@ -785,7 +826,7 @@ export default function Page() {
       const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(VAPID_PUBLIC) });
       const j = sub.toJSON();
       const tz = -new Date().getTimezoneOffset();
-      await supabase.rpc("gs_save_sub", { p_code: code, p_slot: me, p_endpoint: sub.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_bedtime: (goals[me] && goals[me].bedtime) || "23:30", p_tz: tz });
+      await supabase.rpc("gs2_save_sub", { p_code: code, p_slot: me, p_endpoint: sub.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_bedtime: (goals[me] && goals[me].bedtime) || "23:30", p_tz: tz });
       setPushState("on"); setPushMsg("알림을 켰어요! 🔔");
     } catch (e) { setPushState("off"); setPushMsg("알림 설정에 실패했어요. 잠시 후 다시 시도해줘요."); }
   };
@@ -890,48 +931,62 @@ export default function Page() {
 
   if (!ready || !authChecked) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
 
-  if (!code && session) {
-    // Google 로그인은 됐는데 아직 커플코드에 연결 안 된 상태
-    return (
-      <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
-        <style>{css}</style>
-        <div className="td-login">
-          <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
-          <h1>거의 다 왔어요</h1>
-          <p>{session.user.email}로 로그인했어요. 기존 공유 코드를 입력해서 연결해주세요.</p>
-          <input className="td-input" placeholder="공유 코드 (예: tessa-jiin-93f2k)" value={linkCodeInput} onChange={(e) => setLinkCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && linkCouple()} />
-          <div className="td-whopick">
-            <span>나는</span>
-            {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (linkSlotInput === p ? " on" : "")} onClick={() => setLinkSlotInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
-          </div>
-          <button className="td-loginbtn" onClick={linkCouple} disabled={linking}>{linking ? "연결 중…" : "연결하기"}</button>
-          {linkMsg && <small className="td-loginhint" style={{ color: "#e55" }}>{linkMsg}</small>}
-          <small className="td-loginhint" onClick={logoutAuth} style={{ cursor: "pointer", textDecoration: "underline" }}>다른 계정으로 로그인</small>
-        </div>
-      </div>
-    );
-  }
-
-  if (!code) {
+  if (!session) {
+    // 앱 시작: 로그인 화면 (계정 필수, 레거시 코드 로그인은 접이식 임시 제공)
     return (
       <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
         <style>{css}</style>
         <div className="td-login">
           <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
           <h1>우리의 하루</h1>
-          <p>둘만의 공유 코드를 입력하면 같은 기록을 함께 봐요.</p>
-          <input className="td-input" placeholder="공유 코드 (예: tessa-jiin-93f2k)" value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && login()} />
-          <div className="td-whopick">
-            <span>나는</span>
-            {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (meInput === p ? " on" : "")} onClick={() => setMeInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
-          </div>
-          <button className="td-loginbtn" onClick={login}>시작하기</button>
-          <small className="td-loginhint">같은 코드를 두 사람이 입력하면 연결돼요.</small>
+          <p>{authMode === "signup" ? "계정을 만들고 둘만의 기록을 시작해요." : "로그인하고 우리의 기록을 이어가요."}</p>
+          <input className="td-input" type="email" placeholder="이메일" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} />
+          <input className="td-input" type="password" placeholder="비밀번호" value={pwInput} onChange={(e) => setPwInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && authMode === "signin" && emailAuth()} style={{ marginTop: 8 }} />
+          {authMode === "signup" && <input className="td-input" type="password" placeholder="비밀번호 확인" value={pw2Input} onChange={(e) => setPw2Input(e.target.value)} onKeyDown={(e) => e.key === "Enter" && emailAuth()} style={{ marginTop: 8 }} />}
+          <button className="td-loginbtn" onClick={emailAuth} disabled={authBusy}>{authBusy ? "잠시만요…" : authMode === "signup" ? "계정 만들기" : "로그인"}</button>
+          {authMsg && <small className="td-loginhint" style={{ color: authMsg.includes("보냈어요") ? "var(--c1)" : "#e55" }}>{authMsg}</small>}
+          <small className="td-loginhint" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthMsg(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>
+            {authMode === "signin" ? "처음이에요? 계정 만들기" : "이미 계정이 있어요? 로그인"}
+          </small>
           <div className="td-loginor"><span>또는</span></div>
           <button className="td-googlebtn" onClick={loginWithGoogle}>
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.66 9c0-.59.1-1.17.29-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
             Google로 계속하기
           </button>
+          <small className="td-loginhint" onClick={() => setShowLegacy(!showLegacy)} style={{ cursor: "pointer", textDecoration: "underline" }}>예전 공유 코드로 접속 (임시)</small>
+          {showLegacy && (<div style={{ marginTop: 8 }}>
+            <input className="td-input" placeholder="공유 코드" value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && login()} />
+            <div className="td-whopick">
+              <span>나는</span>
+              {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (meInput === p ? " on" : "")} onClick={() => setMeInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
+            </div>
+            <button className="td-loginbtn" onClick={login}>코드로 시작하기</button>
+            <small className="td-loginhint">코드 접속은 곧 종료돼요. 계정을 만들어 연결해주세요!</small>
+          </div>)}
+        </div>
+      </div>
+    );
+  }
+
+  if (!code) {
+    // 로그인은 됐는데 아직 커플에 연결 안 된 상태: 기존 코드 연결 or 새 커플 만들기
+    return (
+      <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
+        <style>{css}</style>
+        <div className="td-login">
+          <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
+          <h1>거의 다 왔어요</h1>
+          <p>{session.user.email}로 로그인했어요.</p>
+          <div className="td-whopick">
+            <span>나는</span>
+            {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (linkSlotInput === p ? " on" : "")} onClick={() => setLinkSlotInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
+          </div>
+          <input className="td-input" placeholder="공유 코드가 있다면 입력" value={linkCodeInput} onChange={(e) => setLinkCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && linkCouple()} />
+          <button className="td-loginbtn" onClick={linkCouple} disabled={linking}>{linking ? "연결 중…" : "코드로 연결하기"}</button>
+          <div className="td-loginor"><span>또는</span></div>
+          <button className="td-googlebtn" onClick={createCouple} disabled={linking}>💞 새 커플 만들기 (코드 자동 생성)</button>
+          {linkMsg && <small className="td-loginhint" style={{ color: "#e55" }}>{linkMsg}</small>}
+          <small className="td-loginhint" onClick={logoutAuth} style={{ cursor: "pointer", textDecoration: "underline" }}>다른 계정으로 로그인</small>
         </div>
       </div>
     );
@@ -1564,7 +1619,7 @@ export default function Page() {
           </div>
         </div>
       )}
-      {unbox && <UnboxOverlay data={unbox} names={names} onClose={() => setUnbox(null)} onOpened={() => { if (unbox.invId) supabase.rpc("gs_item_open", { p_code: code, p_id: unbox.invId }).then(() => supabase.rpc("gs_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); })); }} />}
+      {unbox && <UnboxOverlay data={unbox} names={names} onClose={() => setUnbox(null)} onOpened={() => { if (unbox.invId) supabase.rpc("gs2_item_open", { p_code: code, p_id: unbox.invId }).then(() => supabase.rpc("gs2_inventory_get", { p_code: code }).then(({ data }) => { if (data) setInventory(data); })); }} />}
       {giftItem && (
         <div className="td-letteropen" onClick={() => setGiftItem(null)}>
           <div className="td-envelope" onClick={(ev) => ev.stopPropagation()}>
