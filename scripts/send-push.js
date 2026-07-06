@@ -5,7 +5,7 @@ const { SUPABASE_URL, ANON, BACKUP_SECRET, VAPID_PUBLIC, VAPID_PRIVATE } = proce
 webpush.setVapidDetails("mailto:goodsleep@nick.app", VAPID_PUBLIC, VAPID_PRIVATE);
 
 const pad = (n) => String(n).padStart(2, "0");
-const BED_MSG = { title: "우리의 하루", body: "테사호드관이 명령한다. 자라. 🌙", tag: "bed" };
+const BED_MSG = { title: "우리의 하루", body: "이제 잘 시간이야. 푹 자 🌙", tag: "bed" };
 const REVIEW_MSG = { title: "우리의 하루", body: "이번 주 너의 행동일지 리뷰야, 확인하장 📊", tag: "review" };
 const MONTHLY_MSG = { title: "우리의 하루", body: "이번 달 리포트가 나왔어요 📅 확인해볼까요?", tag: "monthly" };
 
@@ -117,7 +117,8 @@ function quoteFor(slot, localDate, dowMon, days, goals) {
     else if (dowMon === 0) cat = "monday";
     else if (dowMon >= 5) cat = "weekend";
   }
-  const pool = QUOTES[slot][cat];
+  const tone = (g.quoteTone === "a" || g.quoteTone === "b") ? g.quoteTone : slot;
+  const pool = QUOTES[tone][cat];
   return pool[dayOfYear(localDate) % pool.length];
 }
 
@@ -140,7 +141,9 @@ function quoteFor(slot, localDate, dowMon, days, goals) {
     const inBed = diff <= 5;
     console.log(`${row.slot}: local=${pad(Math.floor(lHM/60))}:${pad(lHM%60)} bedtime=${row.bedtime} target=${pad(Math.floor(target/60))}:${pad(target%60)} inWindow=${inBed} last_bed=${row.last_bed}`);
     if (inBed && row.last_bed !== localDate) {
-      if (await send(row, BED_MSG)) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "bed", p_date: localDate }); sent++; }
+      const { goals: bg } = await getCoupleData(row.couple_code);
+      const bmsg = (bg[row.slot] && (bg[row.slot].bedMsg || "").trim()) || BED_MSG.body;
+      if (await send(row, { ...BED_MSG, body: bmsg })) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "bed", p_date: localDate }); sent++; }
     }
 
     // 주간 리뷰: 일요일 19:30~21:30 로컬, 주 1회
