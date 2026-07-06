@@ -189,6 +189,20 @@ const THEME = {
   b: { name: "지인", type: "페어리", emoji: "✨", c1: "#FF8FB3", c2: "#B07BE0", soft: "#FBD7E8", soft2: "#FFF1F7", grat: "#FFF5FC", gratLine: "#EFC9E2", gratTxt: "#C45C9E", sky: "linear-gradient(180deg,#FFB6D2,#C79BE8)", glowD: "#2e1f3a" },
 };
 
+const PALETTES = {
+  coral: { c1: "#FF7043", c2: "#EC4040", soft: "#FFE0CC", soft2: "#FFF0E6", grat: "#FFF7E8", gratLine: "#F2D9A0", gratTxt: "#C98A1E", sky: "linear-gradient(180deg,#FFB37A,#FF8A5B)", glowD: "#3a1f18" },
+  fairy: { c1: "#FF8FB3", c2: "#B07BE0", soft: "#FBD7E8", soft2: "#FFF1F7", grat: "#FFF5FC", gratLine: "#EFC9E2", gratTxt: "#C45C9E", sky: "linear-gradient(180deg,#FFB6D2,#C79BE8)", glowD: "#2e1f3a" },
+  mint: { c1: "#3FBF8F", c2: "#2A9D74", soft: "#CFF0E2", soft2: "#EDFAF4", grat: "#F0FAF2", gratLine: "#B9E3C8", gratTxt: "#2E8B57", sky: "linear-gradient(180deg,#9FE8C8,#5BC99B)", glowD: "#16302a" },
+  lavender: { c1: "#9B7BD6", c2: "#7A5BB8", soft: "#E4D9F5", soft2: "#F5F0FC", grat: "#F7F2FF", gratLine: "#D4C4EE", gratTxt: "#7A5BB8", sky: "linear-gradient(180deg,#CBB3F0,#9B7BD6)", glowD: "#241d38" },
+  sky: { c1: "#4E9BE0", c2: "#3572B8", soft: "#D3E7F8", soft2: "#EEF6FD", grat: "#F0F7FF", gratLine: "#BFDBF2", gratTxt: "#3572B8", sky: "linear-gradient(180deg,#A8D4F5,#5FA8E8)", glowD: "#16283a" },
+  sunny: { c1: "#F2A93D", c2: "#D9871E", soft: "#FBE8C4", soft2: "#FEF6E6", grat: "#FFF9EA", gratLine: "#EFD9A4", gratTxt: "#B8860B", sky: "linear-gradient(180deg,#FFE08A,#F2B33D)", glowD: "#33270f" },
+};
+const CHARACTERS = {
+  fire: { name: "불꽃이", emoji: "🔥" }, seal: { name: "물범이", emoji: "🦭" },
+  bunny: { name: "토끼", emoji: "🐰" }, bear: { name: "곰돌이", emoji: "🐻" },
+  star: { name: "별이", emoji: "⭐" }, cloud: { name: "구름이", emoji: "☁️" },
+  cat: { name: "야옹이", emoji: "🐱" }, chick: { name: "삐약이", emoji: "🐤" },
+};
 // theme variables for light / night
 const themeVars = (t, night) => {
   const base = { "--c1": t.c1, "--c2": t.c2, "--sky": t.sky, "--grattxt": t.gratTxt };
@@ -240,6 +254,37 @@ function CountUp({ value, format }) {
 }
 const relTime = (ts) => { const s = (Date.now() - new Date(ts).getTime()) / 1000; if (s < 120) return "방금 전"; if (s < 3600) return `${Math.floor(s / 60)}분 전`; if (s < 86400) return `${Math.floor(s / 3600)}시간 전`; return `${Math.floor(s / 86400)}일 전`; };
 function FairyBuddy() { return <img src="/seal.jpg" alt="지인" style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }} />; }
+function CharFace({ mood }) {
+  const m = mood || "happy";
+  return (<g>
+    {m === "sleepy" && <path d="M29 52q4 4 8 0M43 52q4 4 8 0" stroke="#3a2a20" strokeWidth="2.4" fill="none" strokeLinecap="round" />}
+    {m === "celebrate" && <path d="M29 53q4 -6 8 0M43 53q4 -6 8 0" stroke="#3a2a20" strokeWidth="2.8" fill="none" strokeLinecap="round" />}
+    {m === "curious" && (<><circle cx="33" cy="52" r="4.6" fill="#3a2a20" /><circle cx="47" cy="52" r="4.6" fill="#3a2a20" /><circle cx="34.5" cy="50.3" r="1.7" fill="#fff" /><circle cx="48.5" cy="50.3" r="1.7" fill="#fff" /></>)}
+    {m === "happy" && (<><circle cx="33" cy="52" r="4.2" fill="#3a2a20" /><circle cx="47" cy="52" r="4.2" fill="#3a2a20" /><circle cx="34.2" cy="50.6" r="1.4" fill="#fff" /><circle cx="48.2" cy="50.6" r="1.4" fill="#fff" /></>)}
+    <ellipse cx="27" cy="58" rx="3.4" ry="2" fill="#FF9FB0" opacity={m === "celebrate" ? ".9" : ".6"} />
+    <ellipse cx="53" cy="58" rx="3.4" ry="2" fill="#FF9FB0" opacity={m === "celebrate" ? ".9" : ".6"} />
+    {m === "sleepy" && <path d="M38 59h4" stroke="#3a2a20" strokeWidth="2" fill="none" strokeLinecap="round" />}
+    {m === "celebrate" && <path d="M35 57q5 6.5 10 0" stroke="#3a2a20" strokeWidth="2.4" fill="none" strokeLinecap="round" />}
+    {m === "curious" && <circle cx="40" cy="59" r="2.6" fill="none" stroke="#3a2a20" strokeWidth="2" />}
+    {m === "happy" && <path d="M37 58q3 3 6 0" stroke="#3a2a20" strokeWidth="2" fill="none" strokeLinecap="round" />}
+  </g>);
+}
+const CHAR_BODIES = {
+  bunny: (<g><ellipse cx="28" cy="18" rx="8" ry="17" fill="#FDFDFD" stroke="#EADFDA" strokeWidth="1.5" /><ellipse cx="28" cy="20" rx="4" ry="11" fill="#FFD3DE" /><ellipse cx="52" cy="18" rx="8" ry="17" fill="#FDFDFD" stroke="#EADFDA" strokeWidth="1.5" /><ellipse cx="52" cy="20" rx="4" ry="11" fill="#FFD3DE" /><circle cx="40" cy="50" r="25" fill="#FDFDFD" stroke="#EADFDA" strokeWidth="1.5" /></g>),
+  bear: (<g><circle cx="20" cy="30" r="10" fill="#B98A64" /><circle cx="20" cy="30" r="5.5" fill="#E8C6A8" /><circle cx="60" cy="30" r="10" fill="#B98A64" /><circle cx="60" cy="30" r="5.5" fill="#E8C6A8" /><circle cx="40" cy="50" r="25" fill="#C89A72" /><ellipse cx="40" cy="60" rx="10" ry="8" fill="#E8C6A8" /></g>),
+  star: (<g><path d="M40 8 L48 34 L75 35 L53 51 L61 76 L40 61 L19 76 L27 51 L5 35 L32 34 Z" fill="#FFD35C" stroke="#EAB93C" strokeWidth="2" strokeLinejoin="round" /></g>),
+  cloud: (<g><ellipse cx="40" cy="55" rx="30" ry="19" fill="#FDFDFF" stroke="#DFE4F0" strokeWidth="1.5" /><circle cx="24" cy="44" r="13" fill="#FDFDFF" /><circle cx="42" cy="37" r="16" fill="#FDFDFF" /><circle cx="57" cy="45" r="12" fill="#FDFDFF" /></g>),
+  cat: (<g><path d="M18 34 L14 10 L34 24 Z" fill="#A8B4C4" /><path d="M20 30 L18 15 L30 24 Z" fill="#F3D9E4" /><path d="M62 34 L66 10 L46 24 Z" fill="#A8B4C4" /><path d="M60 30 L62 15 L50 24 Z" fill="#F3D9E4" /><circle cx="40" cy="50" r="25" fill="#B8C4D4" /><path d="M8 52 L22 55 M8 60 L22 60 M72 52 L58 55 M72 60 L58 60" stroke="#8A96A8" strokeWidth="1.6" strokeLinecap="round" /></g>),
+  chick: (<g><circle cx="40" cy="50" r="25" fill="#FFDD57" stroke="#EFC23C" strokeWidth="1.5" /><path d="M37 24 q3 -9 6 0" stroke="#EFC23C" strokeWidth="2.5" fill="none" strokeLinecap="round" /><ellipse cx="16" cy="56" rx="6" ry="10" fill="#FFD35C" transform="rotate(18 16 56)" /><ellipse cx="64" cy="56" rx="6" ry="10" fill="#FFD35C" transform="rotate(-18 64 56)" /></g>),
+};
+function Character({ id, mood }) {
+  const cid = id || "fire";
+  if (cid === "fire") return <FireBuddy mood={mood} />;
+  if (cid === "seal") return <FairyBuddy />;
+  const body = CHAR_BODIES[cid];
+  if (!body) return <FireBuddy mood={mood} />;
+  return <svg viewBox="0 0 80 80" width="100%" height="100%" aria-hidden="true">{body}<CharFace mood={mood} /></svg>;
+}
 
 const SVGS = {
   bow_pink: () => (<svg className="td-sv" style={{ top: "-16%", left: "50%", transform: "translateX(-50%) rotate(-8deg)", width: "54%" }} viewBox="0 0 60 34"><path d="M30 17 L9 5 Q2 2 2 10 L2 24 Q2 32 9 29 L30 17Z" fill="#FF8FB3" /><path d="M30 17 L51 5 Q58 2 58 10 L58 24 Q58 32 51 29 L30 17Z" fill="#FF8FB3" /><circle cx="30" cy="17" r="6.5" fill="#E4568C" /></svg>),
@@ -424,7 +469,9 @@ export default function Page() {
       if (!alive) return;
       if (error) { if (initial) setLoading(false); return; }
       const { nd, ng, ls } = parseRows(rows);
-      if (initial) { setDays(nd); setGoals(ng); setLoading(false); }
+      if (initial) { setDays(nd); setGoals(ng); setLoading(false);
+        if (!rows || rows.length === 0) supabase.rpc("gs_kiss_award", { p_code: code, p_slot: me, p_delta: 120, p_reason: "welcome_kiss", p_ref_date: "2000-01-01" }).then(() => {});
+      }
       else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
       setLastSeen(ls);
       const [{ data: mrows }, { data: crows }, { data: rrows }, { data: msgs }, { data: ans }, { data: inv }] = await Promise.all([
@@ -538,11 +585,12 @@ export default function Page() {
       supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
     });
   };
+  const trackMealsFor = (slot) => { const gg = goals[slot] || {}; return gg.trackMeals !== undefined ? !!gg.trackMeals : slot === "b"; };
   const isCompleteEntry = (slot, en) => {
     if (!en) return false;
     const base = en.bed && en.wake && en.snack >= 0 && (en.mood || 0) > 0 && (en.gratitude || []).some((x) => (x || "").trim()) && (en.reflection || "").trim();
     if (!base) return false;
-    if (slot === "b") return !!(en.meals && (en.meals.breakfast || en.meals.lunch || en.meals.dinner));
+    if (trackMealsFor(slot)) return !!(en.meals && (en.meals.breakfast || en.meals.lunch || en.meals.dinner));
     return true;
   };
   const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
@@ -776,7 +824,15 @@ export default function Page() {
     return { avg, exDays, logged, spread, nSleep: durs.length };
   };
 
-  const wrapStyle = ready ? themeVars(THEME[page || "a"], night) : themeVars(THEME.a, false);
+  const themeOf = (slot) => {
+    const gg = goals[slot] || {};
+    const pal = PALETTES[gg.palette] || PALETTES[slot === "a" ? "coral" : "fairy"];
+    const ch = CHARACTERS[gg.charId] || CHARACTERS[slot === "a" ? "fire" : "seal"];
+    return { ...THEME[slot], ...pal, emoji: ch.emoji };
+  };
+  const T = { a: themeOf("a"), b: themeOf("b") };
+  const charOf = (slot) => (goals[slot] && goals[slot].charId) || (slot === "a" ? "fire" : "seal");
+  const wrapStyle = ready ? themeVars(T[page || "a"], night) : themeVars(THEME.a, false);
 
   if (!ready) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
 
@@ -800,10 +856,12 @@ export default function Page() {
     );
   }
 
-  const t = THEME[page]; const g = goals[page]; const e = getEntry(page);
+  const t = T[page]; const g = goals[page]; const e = getEntry(page);
   const names = { a: (goals.a && goals.a.name) || THEME.a.name, b: (goals.b && goals.b.name) || THEME.b.name };
+  const qTone = (g && (g.quoteTone === "a" || g.quoteTone === "b")) ? g.quoteTone : page;
   const myCat = quoteCategory(me);
-  const myQuote = QUOTES[me][myCat][dayOfYear(today()) % QUOTES[me][myCat].length];
+  const myTone = (goals[me] && (goals[me].quoteTone === "a" || goals[me].quoteTone === "b")) ? goals[me].quoteTone : me;
+  const myQuote = QUOTES[myTone][myCat][dayOfYear(today()) % QUOTES[myTone][myCat].length];
   const mine = page === me;
   const isMile = (r) => (r.currency || "mile") === "mile";
   const isKiss = (r) => r.currency === "kiss";
@@ -842,7 +900,7 @@ export default function Page() {
   const lastMonthD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
   const lastMonth = monthMetrics(page, lastMonthD.getFullYear(), lastMonthD.getMonth() + 1);
   const monthRegLabel = regLabel(thisMonth.spread);
-  const ringItems = [!!(e.bed && e.wake), e.snack >= 0, (e.mood || 0) > 0, (e.gratitude || []).some((x) => (x || "").trim()), !!(e.reflection || "").trim(), ...(page === "b" ? [!!(e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner))] : [])];
+  const ringItems = [!!(e.bed && e.wake), e.snack >= 0, (e.mood || 0) > 0, (e.gratitude || []).some((x) => (x || "").trim()), !!(e.reflection || "").trim(), ...(trackMealsFor(page) ? [!!(e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner))] : [])];
   const ringDone = ringItems.filter(Boolean).length; const ringTotal = ringItems.length;
   const viewedComplete = isCompleteEntry(page, e);
   const buddyMood = viewedComplete ? "celebrate" : (mins == null ? "curious" : (mood.sleepy ? "sleepy" : "happy"));
@@ -900,13 +958,13 @@ export default function Page() {
         </div>
         {pushMsg && <div className="td-pushmsg" onClick={() => setPushMsg("")}>{pushMsg}</div>}
         <div className="td-quotecard">
-          <span className="td-quoteicon">{me === "a" ? "🕊️" : "🤍"}</span>
+          <span className="td-quoteicon">{myTone === "a" ? "🕊️" : "🤍"}</span>
           <p className="td-quotetext">{myQuote}</p>
         </div>
 
         {view !== "reward" && (
           <div className="td-tabs td-glasscard">
-            {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": THEME[p].c1 }}><span>{THEME[p].emoji}</span>{names[p]}{p === me ? " (나)" : ""}</button>))}
+            {["a", "b"].map((p) => (<button key={p} className={"td-tab" + (page === p ? " on" : "")} onClick={() => setPage(p)} style={{ "--tc": T[p].c1 }}><span>{T[p].emoji}</span>{names[p]}{p === me ? " (나)" : ""}</button>))}
           </div>
         )}
 
@@ -956,7 +1014,7 @@ export default function Page() {
             <div className="td-buddywrap">
               <AvatarDeco avatar={g.avatar} owned={ownedSets[page]} big>
                 <div className={"td-buddy td-breathe lvl" + lvl + (viewedComplete ? " done" : "")}>
-                  {page === "a" ? <FireBuddy mood={buddyMood} /> : <FairyBuddy />}
+                  <Character id={charOf(page)} mood={buddyMood} />
                   {lvl > 0 && <span className="td-spark s1">✨</span>}
                   {lvl > 1 && <span className="td-spark s2">✨</span>}
                   {lvl > 2 && <span className="td-spark s3">⭐</span>}
@@ -1013,7 +1071,7 @@ export default function Page() {
                 </>) },
               { k: "mood", label: "🙂 오늘 기분", filled: (e.mood || 0) > 0, sum: (e.mood || 0) > 0 ? MOODS[e.mood - 1] : "미기록",
                 body: (<div className="td-chips">{MOODS.map((m2, i) => (<button key={i} className={"td-chip td-moodchip" + (e.mood === i + 1 ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { mood: e.mood === i + 1 ? 0 : i + 1 })}>{m2}</button>))}</div>) },
-              ...(page === "b" ? [{ k: "meals", label: "🍽️ 오늘의 식단", cls: " td-meals", filled: !!(e.meals.breakfast || e.meals.lunch || e.meals.dinner), sum: [e.meals.breakfast, e.meals.lunch, e.meals.dinner].filter(Boolean).join(" / ") || "미기록",
+              ...(trackMealsFor(page) ? [{ k: "meals", label: "🍽️ 오늘의 식단", cls: " td-meals", filled: !!(e.meals.breakfast || e.meals.lunch || e.meals.dinner), sum: [e.meals.breakfast, e.meals.lunch, e.meals.dinner].filter(Boolean).join(" / ") || "미기록",
                 body: (<>
                   <div className="td-mealrow"><span>🌅 아침</span><input className="td-input td-mealinput" placeholder="아침에 뭐 먹었어?" value={e.meals.breakfast} disabled={!mine} onChange={(ev) => updateMeal(page, "breakfast", ev.target.value)} /></div>
                   <div className="td-mealrow"><span>🌞 점심</span><input className="td-input td-mealinput" placeholder="점심에 뭐 먹었어?" value={e.meals.lunch} disabled={!mine} onChange={(ev) => updateMeal(page, "lunch", ev.target.value)} /></div>
@@ -1069,6 +1127,31 @@ export default function Page() {
           {showGoals && (
             <div className="td-goalpanel td-card">
               <div className="td-goalrow"><label>이름</label><input type="text" value={g.name || ""} placeholder={THEME[page].name} disabled={!mine} onChange={(ev) => saveGoal(page, { name: ev.target.value })} style={{ width: 140 }} /></div>
+              <div className="td-goalrow td-goalcol"><label>캐릭터</label>
+                <div className="td-charpick">
+                  {Object.entries(CHARACTERS).map(([cid, c]) => (
+                    <button key={cid} className={"td-charbtn" + (charOf(page) === cid ? " on" : "")} disabled={!mine} onClick={() => saveGoal(page, { charId: cid })}>
+                      <span className="td-charprev"><Character id={cid} mood="happy" /></span><i>{c.name}</i>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="td-goalrow td-goalcol"><label>테마 색</label>
+                <div className="td-palpick">
+                  {Object.entries(PALETTES).map(([pid, p]) => (
+                    <button key={pid} className={"td-palbtn" + (((g.palette) || (page === "a" ? "coral" : "fairy")) === pid ? " on" : "")} disabled={!mine} style={{ background: `linear-gradient(135deg,${p.c1},${p.c2})` }} onClick={() => saveGoal(page, { palette: pid })} />
+                  ))}
+                </div>
+              </div>
+              <div className="td-goalrow"><label>🍽️ 식단 기록</label><button className={"td-exbtn" + (trackMealsFor(page) ? " on" : "")} disabled={!mine} onClick={() => saveGoal(page, { trackMeals: !trackMealsFor(page) })}>{trackMealsFor(page) ? "켬" : "끔"}</button></div>
+              <div className="td-goalrow"><label>아침 문구 톤</label>
+                <div className="td-chips" style={{ flex: "0 0 auto" }}>
+                  {[["a", "🕊️ 담담"], ["b", "🤍 다정"]].map(([tn, lb]) => (
+                    <button key={tn} className={"td-chip" + ((((g.quoteTone === "a" || g.quoteTone === "b") ? g.quoteTone : page) === tn) ? " on" : "")} disabled={!mine} onClick={() => saveGoal(page, { quoteTone: tn })} style={{ flex: "0 0 auto", padding: "8px 12px" }}>{lb}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="td-goalrow td-goalcol"><label>취침 알림 문구</label><input type="text" value={g.bedMsg || ""} placeholder="이제 잘 시간이야. 푹 자 🌙" disabled={!mine} onChange={(ev) => saveGoal(page, { bedMsg: ev.target.value })} /></div>
               <div className="td-goalrow"><label>목표 취침</label><input type="time" value={g.bedtime} disabled={!mine} onChange={(ev) => saveGoal(page, { bedtime: ev.target.value })} /></div>
               <div className="td-goalrow"><label>목표 기상</label><input type="time" value={g.wake} disabled={!mine} onChange={(ev) => saveGoal(page, { wake: ev.target.value })} /></div>
               <div className="td-goalrow"><label>목표 수면(시간)</label><input type="number" step="0.5" min="4" max="12" value={g.sleepHours} disabled={!mine} onChange={(ev) => saveGoal(page, { sleepHours: parseFloat(ev.target.value) || 7.5 })} /></div>
@@ -1122,12 +1205,12 @@ export default function Page() {
               {thisWeek.map((dk) => {
                 const dd = days[dk] || {}; const ma = sleepMinutes(dd.a?.bed, dd.a?.wake); const mb = sleepMinutes(dd.b?.bed, dd.b?.wake); const lab = labelDate(dk);
                 return (<button key={dk} className={"td-daycol" + (dk === date ? " sel" : "")} onClick={() => { setDate(dk); setView("today"); }}>
-                  <div className="td-barpair"><span className="td-bar" style={{ height: (ma ? Math.min(100, ma / 540 * 100) : 0) + "%", background: THEME.a.c1 }} /><span className="td-bar" style={{ height: (mb ? Math.min(100, mb / 540 * 100) : 0) + "%", background: THEME.b.c1 }} /></div>
+                  <div className="td-barpair"><span className="td-bar" style={{ height: (ma ? Math.min(100, ma / 540 * 100) : 0) + "%", background: T.a.c1 }} /><span className="td-bar" style={{ height: (mb ? Math.min(100, mb / 540 * 100) : 0) + "%", background: T.b.c1 }} /></div>
                   <span className="td-daylab">{lab.short}</span>
                 </button>);
               })}
             </div>
-            <div className="td-legend"><span><i style={{ background: THEME.a.c1 }} />{names.a}</span><span><i style={{ background: THEME.b.c1 }} />{names.b}</span></div>
+            <div className="td-legend"><span><i style={{ background: T.a.c1 }} />{names.a}</span><span><i style={{ background: T.b.c1 }} />{names.b}</span></div>
           </div>
         </>)}
 
@@ -1157,14 +1240,14 @@ export default function Page() {
         {view === "reward" && (<>
           <div className="td-mileherocard td-card">
             <div className="td-milerow">
-              <div className="td-milecol" style={{ "--mc": THEME[me].c1 }}>
-                <span className="td-mileemoji">{THEME[me].emoji}</span>
+              <div className="td-milecol" style={{ "--mc": T[me].c1 }}>
+                <span className="td-mileemoji">{T[me].emoji}</span>
                 <span className="td-milename">{names[me]} (나)</span>
                 <span className="td-milenum"><CountUp value={myBal} /><i>p</i></span>
               </div>
               <div className="td-milediv">💞</div>
-              <div className="td-milecol td-sub" style={{ "--mc": THEME[partner].c1 }}>
-                <span className="td-mileemoji">{THEME[partner].emoji}</span>
+              <div className="td-milecol td-sub" style={{ "--mc": T[partner].c1 }}>
+                <span className="td-mileemoji">{T[partner].emoji}</span>
                 <span className="td-milename">{names[partner]}</span>
                 <span className="td-milenum"><CountUp value={me === "a" ? balB : balA} /><i>p</i></span>
               </div>
@@ -1285,7 +1368,7 @@ export default function Page() {
             <span className="td-stylebal td-kissbal">💋 <CountUp value={myKiss} /></span>
             <div className="td-stylepreview">
               <AvatarDeco avatar={goals[page] && goals[page].avatar} owned={ownedSets[page]} tryOn={styleMine ? tryOn : {}} big>
-                <div className="td-buddy" style={{ width: 118, height: 118 }}>{page === "a" ? <FireBuddy mood="happy" /> : <FairyBuddy />}</div>
+                <div className="td-buddy" style={{ width: 118, height: 118 }}><Character id={charOf(page)} mood="happy" /></div>
               </AvatarDeco>
             </div>
             {styleMine && Object.keys(tryOn).length > 0 && (
@@ -1425,7 +1508,7 @@ export default function Page() {
       {bigCeleb && (
         <div className="td-bigceleb" key={bigCeleb.key} onClick={() => setBigCeleb(null)}>
           <div className="td-bigrays" />
-          <div className="td-bigbuddy">{me === "a" ? <FireBuddy mood="celebrate" /> : <FairyBuddy />}</div>
+          <div className="td-bigbuddy"><Character id={charOf(me)} mood="celebrate" /></div>
           <h2>{bigCeleb.title}</h2>
           <p>{bigCeleb.sub}</p>
           <span className="td-bigclose">화면을 탭하면 닫혀요</span>
@@ -1882,6 +1965,17 @@ const css = `
 .td-gachaitem small{ font-size:9px; color:var(--muted); }
 .td-jackpot{ position:absolute; top:-8px; right:-6px; background:#FFD874; color:#8A5A1C; font-family:'Jua'; font-size:9px; padding:2px 6px; border-radius:999px; transform:rotate(8deg); box-shadow:0 2px 6px rgba(0,0,0,.2); }
 .td-spin{ animation:spinslow 4s linear infinite; }
+.td-goalcol{ flex-direction:column; align-items:flex-start !important; gap:8px; }
+.td-goalcol input{ width:100% !important; }
+.td-charpick{ display:grid; grid-template-columns:repeat(4,1fr); gap:8px; width:100%; }
+.td-charbtn{ display:flex; flex-direction:column; align-items:center; gap:3px; border:2px solid var(--soft); border-radius:14px; background:var(--field); padding:8px 4px 6px; cursor:pointer; }
+.td-charbtn.on{ border-color:var(--c1); background:var(--card); box-shadow:0 3px 10px var(--shadow); }
+.td-charprev{ width:44px; height:44px; display:block; }
+.td-charbtn i{ font-style:normal; font-family:'Jua'; font-size:10px; color:var(--muted); }
+.td-charbtn.on i{ color:var(--c2); }
+.td-palpick{ display:flex; gap:9px; flex-wrap:wrap; }
+.td-palbtn{ width:34px; height:34px; border-radius:50%; border:3px solid transparent; cursor:pointer; box-shadow:0 2px 6px var(--shadow); }
+.td-palbtn.on{ border-color:var(--card); outline:2.5px solid var(--c2); }
 .td-foot{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; font-size:12px; color:var(--muted); }
 .td-foot button{ border:none; background:none; color:var(--muted); text-decoration:underline; cursor:pointer; font-size:12px; font-family:inherit; }
 
