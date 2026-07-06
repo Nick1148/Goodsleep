@@ -432,6 +432,24 @@ export default function Page() {
   const [linkSlotInput, setLinkSlotInput] = useState("a");
   const [linkMsg, setLinkMsg] = useState("");
   const [linking, setLinking] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const inv = params.get("invite");
+      if (inv) {
+        setInviteCode(inv.trim());
+        setLinkCodeInput(inv.trim());
+        setCodeInput(inv.trim());
+        setLinkSlotInput("b"); // 초대받은 쪽은 보통 b 슬롯 (만든 사람이 a)
+        setMeInput("b");
+        const url = new URL(window.location.href);
+        url.searchParams.delete("invite");
+        window.history.replaceState({}, "", url.toString());
+      }
+    } catch (e) {}
+  }, []);
 
   const checkWhoami = useCallback(async () => {
     const { data, error } = await supabase.rpc("gs_whoami");
@@ -510,14 +528,31 @@ export default function Page() {
 
   const logoutAuth = async () => { await supabase.auth.signOut(); setSession(null); logout(); };
 
+  const [pendingInvite, setPendingInvite] = useState(null); // {code, slot}
+
   const createCouple = async () => {
     setLinking(true); setLinkMsg("");
     const { data, error } = await supabase.rpc("gs2_create_couple", { p_slot: linkSlotInput });
     setLinking(false);
     if (error || !data || !data.ok) { setLinkMsg(data && data.reason === "already_linked" ? "이미 연결된 계정이에요." : "커플 생성에 실패했어요."); return; }
     try { localStorage.setItem(LS_CODE, data.couple_code); localStorage.setItem(LS_ME, data.slot); } catch (e) {}
-    setCode(data.couple_code); setMe(data.slot); setPage(data.slot);
-    alert("커플 코드가 만들어졌어요: " + data.couple_code + "\n연인에게 이 코드를 공유해주세요!");
+    setPendingInvite({ code: data.couple_code, slot: data.slot });
+  };
+
+  const enterApp = () => {
+    if (!pendingInvite) return;
+    setCode(pendingInvite.code); setMe(pendingInvite.slot); setPage(pendingInvite.slot);
+    setPendingInvite(null);
+  };
+
+  const shareInvite = async (coupleCode) => {
+    const url = `${window.location.origin}/?invite=${encodeURIComponent(coupleCode)}`;
+    const text = `우리의 하루에서 같이 기록해요! 아래 링크로 들어와줘 💌`;
+    if (navigator.share) {
+      try { await navigator.share({ title: "우리의 하루 초대", text, url }); return; } catch (e) {}
+    }
+    try { await navigator.clipboard.writeText(`${text}\n${url}`); setLinkMsg("초대 링크를 복사했어요! 카톡 등에 붙여넣어주세요."); }
+    catch (e) { setLinkMsg("링크: " + url); }
   };
 
   useEffect(() => {
@@ -968,6 +1003,24 @@ export default function Page() {
     );
   }
 
+  if (pendingInvite) {
+    return (
+      <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
+        <style>{css}</style>
+        <div className="td-login">
+          <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
+          <h1>커플이 만들어졌어요!</h1>
+          <p>아래 버튼으로 연인에게 초대 링크를 보내주세요. 링크를 열면 자동으로 연결돼요.</p>
+          <button className="td-loginbtn" onClick={() => shareInvite(pendingInvite.code)}>💌 초대 링크 공유하기</button>
+          <small className="td-loginhint">공유 코드: {pendingInvite.code}</small>
+          {linkMsg && <small className="td-loginhint" style={{ color: "var(--c1)" }}>{linkMsg}</small>}
+          <div className="td-loginor"><span>또는</span></div>
+          <button className="td-googlebtn" onClick={enterApp}>일단 시작하기</button>
+        </div>
+      </div>
+    );
+  }
+
   if (!code) {
     // 로그인은 됐는데 아직 커플에 연결 안 된 상태: 기존 코드 연결 or 새 커플 만들기
     return (
@@ -976,15 +1029,17 @@ export default function Page() {
         <div className="td-login">
           <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
           <h1>거의 다 왔어요</h1>
-          <p>{session.user.email}로 로그인했어요.</p>
+          <p>{session.user.email}로 로그인했어요.{inviteCode ? " 초대받은 코드로 자동 입력해뒀어요!" : ""}</p>
           <div className="td-whopick">
             <span>나는</span>
             {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (linkSlotInput === p ? " on" : "")} onClick={() => setLinkSlotInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
           </div>
           <input className="td-input" placeholder="공유 코드가 있다면 입력" value={linkCodeInput} onChange={(e) => setLinkCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && linkCouple()} />
           <button className="td-loginbtn" onClick={linkCouple} disabled={linking}>{linking ? "연결 중…" : "코드로 연결하기"}</button>
-          <div className="td-loginor"><span>또는</span></div>
-          <button className="td-googlebtn" onClick={createCouple} disabled={linking}>💞 새 커플 만들기 (코드 자동 생성)</button>
+          {!inviteCode && (<>
+            <div className="td-loginor"><span>또는</span></div>
+            <button className="td-googlebtn" onClick={createCouple} disabled={linking}>💞 새 커플 만들기 (코드 자동 생성)</button>
+          </>)}
           {linkMsg && <small className="td-loginhint" style={{ color: "#e55" }}>{linkMsg}</small>}
           <small className="td-loginhint" onClick={logoutAuth} style={{ cursor: "pointer", textDecoration: "underline" }}>다른 계정으로 로그인</small>
         </div>
