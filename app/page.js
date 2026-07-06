@@ -152,6 +152,8 @@ const ITEMS = [
   { id: "b_forest", cat: "bg", tier: 3, price: 145, name: "숲속", icon: "🌲", sp: [{ e: "🌿", st: { bottom: "12%", left: "10%", fontSize: 13 } }, { e: "🍄", st: { bottom: "14%", right: "14%", fontSize: 11 } }] },
   { id: "b_space", cat: "bg", tier: 4, price: 480, name: "우주", icon: "🚀", sp: [{ e: "🪐", st: { top: "16%", right: "12%", fontSize: 14 } }, { e: "⭐", st: { top: "30%", left: "14%", fontSize: 9 } }, { e: "✨", st: { bottom: "20%", right: "20%", fontSize: 10 } }] },
   { id: "b_heart", cat: "bg", tier: 3, price: 150, name: "하트 가득", icon: "💕", sp: [{ e: "💗", st: { top: "16%", left: "14%", fontSize: 12 } }, { e: "💕", st: { top: "30%", right: "12%", fontSize: 10 } }, { e: "💓", st: { bottom: "18%", left: "18%", fontSize: 11 } }] },
+  { id: "h_acrown", cat: "head", tier: 4, price: 500, name: "오로라 왕관", icon: "👑", svg: "acrown" },
+  { id: "n_gem", cat: "neck", tier: 3, price: 160, name: "루비 펜던트", icon: "💎", svg: "gem" },
 ];
 const ITEMS_BY_ID = Object.fromEntries(ITEMS.map((it) => [it.id, it]));
 const LEDGER_LABEL = { daily: "오늘 기록", weekly_sleepreg: "주간 수면 규칙성", weekly_exercise: "주간 운동 목표", monthly_bonus: "월간 개근 보너스", milestone_30: "30일 마일스톤", milestone_100: "100일 마일스톤", milestone_365: "365일 마일스톤" };
@@ -245,7 +247,7 @@ const SVGS = {
   beret: () => (<svg className="td-sv" style={{ top: "-15%", left: "48%", transform: "translateX(-50%) rotate(-10deg)", width: "62%" }} viewBox="0 0 70 34"><ellipse cx="35" cy="24" rx="33" ry="11" fill="#D64550" /><ellipse cx="35" cy="17" rx="26" ry="12" fill="#E85963" /><rect x="33" y="2" width="4" height="8" rx="2" fill="#B93A44" /></svg>),
   bear: () => (<svg className="td-sv" style={{ top: "-12%", left: "50%", transform: "translateX(-50%)", width: "84%" }} viewBox="0 0 100 30"><circle cx="18" cy="16" r="13" fill="#B98A64" /><circle cx="18" cy="16" r="7" fill="#E8C6A8" /><circle cx="82" cy="16" r="13" fill="#B98A64" /><circle cx="82" cy="16" r="7" fill="#E8C6A8" /></svg>),
   fcrown: () => (<svg className="td-sv" style={{ top: "-11%", left: "50%", transform: "translateX(-50%)", width: "80%" }} viewBox="0 0 90 26"><path d="M6 20 Q45 4 84 20" stroke="#7FBF8E" strokeWidth="5" fill="none" strokeLinecap="round" />{[14, 32, 45, 58, 76].map((x, i) => (<g key={i}><circle cx={x} cy={i % 2 ? 11 : 15} r="6" fill={i % 2 ? "#FFB6D2" : "#FFD6E8"} /><circle cx={x} cy={i % 2 ? 11 : 15} r="2.4" fill="#F6C453" /></g>))}</svg>),
-  tiara: () => (<svg className="td-sv td-twk" style={{ top: "-20%", left: "50%", transform: "translateX(-50%)", width: "56%" }} viewBox="0 0 64 34"><path d="M4 30 L10 10 L22 24 L32 4 L42 24 L54 10 L60 30 Z" fill="#F6C453" stroke="#E0A23B" strokeWidth="2" strokeLinejoin="round" /><circle cx="32" cy="12" r="3.4" fill="#FF6FA5" /><circle cx="13" cy="18" r="2.4" fill="#6EC5FF" /><circle cx="51" cy="18" r="2.4" fill="#8FE39B" /></svg>),
+  tiara: () => (<svg className="td-sv td-twk" style={{ top: "-20%", left: "50%", transform: "translateX(-50%)", width: "56%" }} viewBox="0 0 64 34"><path d="M4 30 L10 10 L22 24 L32 4 L42 24 L54 10 L60 30 Z" fill="#F6C453" stroke="#E0A23B" strokeWidth="2" strokeLinejoin="round" /><circle cx="32" cy="12" r="3.4" fill="#FF6FA5" className="td-twk" /><circle cx="32" cy="12" r="5.8" fill="none" stroke="#FFFFFF" strokeWidth="1" opacity=".75" className="td-twk" /><circle cx="13" cy="18" r="2.4" fill="#6EC5FF" className="td-twk" /><circle cx="51" cy="18" r="2.4" fill="#8FE39B" className="td-twk" /></svg>),
   halo: () => (<svg className="td-sv td-halofloat" style={{ top: "-25%", left: "50%", transform: "translateX(-50%)", width: "52%" }} viewBox="0 0 60 18"><ellipse cx="30" cy="9" rx="26" ry="7" fill="none" stroke="#FFD874" strokeWidth="5" /><ellipse cx="30" cy="9" rx="26" ry="7" fill="none" stroke="#FFF3C4" strokeWidth="2" /></svg>),
   blush: () => (<svg className="td-sv" style={{ top: "56%", left: "50%", transform: "translateX(-50%)", width: "78%" }} viewBox="0 0 90 20"><ellipse cx="16" cy="10" rx="11" ry="6" fill="#FF9FB0" opacity=".55" /><ellipse cx="74" cy="10" rx="11" ry="6" fill="#FF9FB0" opacity=".55" /></svg>),
   glasses: () => (<svg className="td-sv" style={{ top: "46%", left: "50%", transform: "translateX(-50%)", width: "64%" }} viewBox="0 0 80 26"><circle cx="20" cy="13" r="11" fill="rgba(255,255,255,.22)" stroke="#5B4A3F" strokeWidth="3" /><circle cx="60" cy="13" r="11" fill="rgba(255,255,255,.22)" stroke="#5B4A3F" strokeWidth="3" /><path d="M31 13 Q40 7 49 13" stroke="#5B4A3F" strokeWidth="3" fill="none" /></svg>),
@@ -260,12 +262,21 @@ const SVGS = {
   sleepmask: () => (<svg className="td-sv" style={{ top: "44%", left: "50%", transform: "translateX(-50%)", width: "66%" }} viewBox="0 0 80 22"><rect x="6" y="4" width="68" height="15" rx="7.5" fill="#B29CE0" /><path d="M20 12 q5 4 10 0M50 12 q5 4 10 0" stroke="#fff" strokeWidth="2" fill="none" strokeLinecap="round" /></svg>),
   choker: () => (<svg className="td-sv" style={{ bottom: "0%", left: "50%", transform: "translateX(-50%)", width: "72%" }} viewBox="0 0 80 16"><rect x="4" y="6" width="72" height="5" rx="2.5" fill="#E4568C" /><circle cx="40" cy="8.5" r="5" fill="#FF8FB3" /><circle cx="40" cy="8.5" r="2" fill="#fff" /></svg>),
   heartnk: () => (<svg className="td-sv" style={{ bottom: "-2%", left: "50%", transform: "translateX(-50%)", width: "60%" }} viewBox="0 0 70 26"><path d="M6 4 Q35 16 64 4" stroke="#F6C453" strokeWidth="2" fill="none" /><path d="M35 12 q-6 -7 -11 -1 q-3 4 11 11 q14 -7 11 -11 q-5 -6 -11 1Z" fill="#FFC93C" /></svg>),
+  acrown: () => (<svg className="td-sv td-hue" style={{ top: "-22%", left: "50%", transform: "translateX(-50%)", width: "58%" }} viewBox="0 0 64 34"><defs><linearGradient id="gsac" x1="0" x2="1"><stop offset="0" stopColor="#8FD3FF" /><stop offset=".5" stopColor="#C9A6FF" /><stop offset="1" stopColor="#FF9EC1" /></linearGradient></defs><path d="M6 30 L10 8 L20 20 L32 4 L44 20 L54 8 L58 30 Z" fill="url(#gsac)" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" /><circle cx="32" cy="24" r="3" fill="#fff" opacity=".9" className="td-twk" /></svg>),
+  gem: () => (<svg className="td-sv" style={{ bottom: "-1%", left: "50%", transform: "translateX(-50%)", width: "50%" }} viewBox="0 0 60 24"><path d="M6 3 Q30 13 54 3" stroke="#E8D9C8" strokeWidth="2" fill="none" /><path d="M30 10 L24 15 L30 22 L36 15 Z" fill="#E4386B" className="td-twk" /><path d="M26 12 L34 12 L30 10 Z" fill="#FF7FA0" /></svg>),
 };
+function ItemThumb({ it }) {
+  if (it.svg) { const C = SVGS[it.svg]; return <span className="td-thumb">{C ? <C /> : null}</span>; }
+  if (it.cat === "bg") return <span className={"td-thumb td-thumbbg abg-" + it.id} />;
+  if (it.cat === "frame") return (<span className="td-thumb"><span className={"td-avatar frame-" + it.id}><span className="td-avatarinner td-fprevdot" /></span></span>);
+  if (it.ps) return <span className="td-thumb td-thumbaura">{it.ps.slice(0, 3).map((p, i) => <i key={i}>{p}</i>)}</span>;
+  return <span className="td-thumb td-thumbemoji">{it.e || it.icon}</span>;
+}
 function ItemNode({ it }) {
   if (!it) return null;
   if (it.svg) { const C = SVGS[it.svg]; return C ? <C /> : null; }
-  if (it.pair) return (<><span className={"td-itm td-cheekL " + (it.cls || "")}>{it.e}</span><span className={"td-itm td-cheekR " + (it.cls || "")}>{it.e}</span></>);
-  if (it.e) return <span className={"td-itm td-itm-" + it.cat + (it.cls ? " " + it.cls : "")} style={it.st}>{it.e}</span>;
+  if (it.pair) return (<><span className={"td-itm td-cheekL " + (it.cls || "") + (it.tier >= 3 ? " td-tg" + it.tier : "")}>{it.e}</span><span className={"td-itm td-cheekR " + (it.cls || "") + (it.tier >= 3 ? " td-tg" + it.tier : "")}>{it.e}</span></>);
+  if (it.e) return <span className={"td-itm td-itm-" + it.cat + (it.cls ? " " + it.cls : "") + (it.tier >= 3 ? " td-tg" + it.tier : "")} style={it.st}>{it.e}</span>;
   return null;
 }
 function AvatarDeco({ avatar, owned, tryOn, children, big }) {
@@ -1334,7 +1345,7 @@ export default function Page() {
                 return (
                   <div key={it.id} className={"td-shopitem tier" + it.tier + (trying ? " trying" : "")}>
                     <span className="td-tierbadge">{TIER_NAMES[it.tier]}</span>
-                    <button className="td-itempreview" onClick={() => setTryOn((s) => { const n = { ...s }; if (trying) delete n[it.cat]; else n[it.cat] = it.id; return n; })}>{it.icon}</button>
+                    <button className="td-itempreview" onClick={() => setTryOn((s) => { const n = { ...s }; if (trying) delete n[it.cat]; else n[it.cat] = it.id; return n; })}><ItemThumb it={it} /></button>
                     <b className="td-itemname">{it.name}</b>
                     <span className="td-itemprice">💋 {it.price}</span>
                     {own ? <span className="td-ownedtag">✓ 보유 중</span> : (
@@ -1760,14 +1771,32 @@ const css = `
 .td-shopitem{ position:relative; display:flex; flex-direction:column; align-items:center; gap:5px; border-radius:18px; padding:24px 10px 12px; background:var(--card); box-shadow:0 3px 10px var(--shadow); border:2px solid var(--line); color:var(--ink); }
 .td-shopitem.tier2{ border-color:#B9E8CC; background:linear-gradient(170deg,#FDFFFE,#EAF8EF); color:#4A4038; }
 .td-shopitem.tier3{ border-color:#D9C8F5; background:linear-gradient(170deg,#FDFCFF,#F3EBFF); color:#4A4038; }
-.td-shopitem.tier4{ border-color:#FFD874; background:linear-gradient(150deg,#FFF9E8,#FFEFF7,#EAF4FF); background-size:200% 200%; animation:holoshine 4s ease infinite; color:#4A4038; }
+.td-shopitem.tier4{ border:2px solid #FFCE63; background:linear-gradient(135deg,#FFF6D8,#FFE0EE,#E4EFFF,#FFF6D8); background-size:300% 300%; animation:holoshine 5s ease infinite; color:#4A4038; box-shadow:0 6px 22px rgba(255,190,90,.4), 0 0 0 1px rgba(255,255,255,.6) inset; overflow:hidden; }
+.td-shopitem.tier4::before{ content:"✦"; position:absolute; top:6px; right:9px; color:#F6C453; font-size:12px; animation:twinkle 1.6s ease-in-out infinite; }
+.td-shopitem.tier4::after{ content:""; position:absolute; top:0; left:-60%; width:45%; height:100%; background:linear-gradient(105deg,transparent,rgba(255,255,255,.75),transparent); transform:skewX(-18deg); animation:cardsweep 3.4s ease-in-out infinite; }
+@keyframes cardsweep{ 0%{ left:-60%; } 55%,100%{ left:130%; } }
+.td-shopitem.tier3{ border:2px solid #D9C8F5; background:linear-gradient(160deg,#FBF7FF,#F0E6FF); box-shadow:0 5px 18px rgba(160,110,220,.28); color:#4A4038; }
 @keyframes holoshine{ 0%,100%{ background-position:0% 0%; } 50%{ background-position:100% 100%; } }
 .td-shopitem.trying{ outline:3px dashed var(--c1); outline-offset:2px; }
 .td-tierbadge{ position:absolute; top:8px; left:8px; font-family:'Jua'; font-size:9px; padding:2px 7px; border-radius:999px; background:var(--soft2); color:var(--muted); }
 .td-shopitem.tier2 .td-tierbadge{ background:#DFF3E6; color:#3DAE7B; }
 .td-shopitem.tier3 .td-tierbadge{ background:#EDE3FB; color:#8E6BC7; }
-.td-shopitem.tier4 .td-tierbadge{ background:linear-gradient(90deg,#FFE9A8,#FFD1E8); color:#B8860B; }
-.td-itempreview{ font-size:34px; background:none; border:none; cursor:pointer; line-height:1.2; padding:2px; }
+.td-shopitem.tier4 .td-tierbadge{ background:linear-gradient(90deg,#FFE082,#FFC7E6,#FFE082); background-size:200% 100%; animation:holoshine 3s linear infinite; color:#9A6B00; font-weight:bold; box-shadow:0 1px 4px rgba(255,180,80,.5); }
+.td-itempreview{ position:relative; width:64px; height:64px; background:none; border:none; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; }
+.td-thumb{ position:relative; width:60px; height:60px; display:flex; align-items:center; justify-content:center; }
+.td-thumb .td-sv{ position:static !important; transform:none !important; width:80% !important; top:auto !important; left:auto !important; bottom:auto !important; }
+.td-thumbbg{ width:52px; height:52px; border-radius:50%; box-shadow:inset 0 -4px 8px rgba(0,0,0,.08); }
+.td-thumb .td-avatar{ transform:scale(.62); } .td-fprevdot{ width:56px; height:56px; border-radius:50%; background:var(--soft2); }
+.td-thumbaura{ gap:3px; } .td-thumbaura i{ font-size:15px; font-style:normal; animation:twinkle 1.8s ease-in-out infinite; }
+.td-thumbaura i:nth-child(2){ animation-delay:.3s; } .td-thumbaura i:nth-child(3){ animation-delay:.6s; }
+.td-thumbemoji{ font-size:34px; }
+.td-shopitem.tier3 .td-thumb, .td-shopitem.tier4 .td-thumb{ animation:thumbfloat 3s ease-in-out infinite; }
+@keyframes thumbfloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-5px); } }
+.td-shopitem.tier4 .td-thumb{ filter:drop-shadow(0 4px 10px rgba(255,180,80,.55)); }
+.td-shopitem.tier3 .td-thumb{ filter:drop-shadow(0 3px 8px rgba(160,110,220,.4)); }
+/* 착용 시 등급 글로우 */
+.td-tg3{ filter:drop-shadow(0 0 5px rgba(180,120,240,.85)) drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
+.td-tg4{ filter:drop-shadow(0 0 7px #FFD874) drop-shadow(0 0 12px rgba(255,200,90,.6)) drop-shadow(0 2px 3px rgba(0,0,0,.18)); }
 .td-itemname{ font-family:'Jua'; font-size:12.5px; text-align:center; min-height:32px; display:flex; align-items:center; color:inherit; }
 .td-itemprice{ font-family:'Jua'; font-size:12px; color:#8A7A66; background:rgba(255,255,255,.65); padding:2px 9px; border-radius:999px; }
 .td-itembtns{ display:flex; gap:5px; width:100%; margin-top:4px; }
