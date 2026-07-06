@@ -425,6 +425,60 @@ export default function Page() {
   const [initFilled, setInitFilled] = useState({});
   const saveTimers = useRef({});
 
+  // ---- Phase 2: Auth (병행 모드) ----
+  const [session, setSession] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [linkCodeInput, setLinkCodeInput] = useState("");
+  const [linkSlotInput, setLinkSlotInput] = useState("a");
+  const [linkMsg, setLinkMsg] = useState("");
+  const [linking, setLinking] = useState(false);
+
+  const checkWhoami = useCallback(async () => {
+    const { data, error } = await supabase.rpc("gs_whoami");
+    const row = !error && data && data[0];
+    if (row && row.slot) {
+      try { localStorage.setItem(LS_CODE, row.couple_code); localStorage.setItem(LS_ME, row.slot); } catch (e) {}
+      setCode(row.couple_code); setMe(row.slot); setPage(row.slot);
+      return true;
+    }
+    return false;
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session || null);
+      if (data.session) checkWhoami().then(() => setAuthChecked(true));
+      else setAuthChecked(true);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+      if (newSession) checkWhoami();
+    });
+    return () => { sub && sub.subscription && sub.subscription.unsubscribe(); };
+  }, [checkWhoami]);
+
+  const loginWithGoogle = () => {
+    supabase.auth.signInWithOAuth({ provider: "google", options: { redirectTo: window.location.origin } });
+  };
+
+  const linkCouple = async () => {
+    const c = linkCodeInput.trim();
+    if (!c) return;
+    setLinking(true); setLinkMsg("");
+    const { data, error } = await supabase.rpc("gs_link_couple", { p_code: c, p_slot: linkSlotInput });
+    setLinking(false);
+    if (error || !data || !data.ok) {
+      const reason = (data && data.reason) || "error";
+      const msgMap = { code_not_found: "코드를 찾을 수 없어요.", slot_taken: "이미 다른 계정이 이 슬롯을 쓰고 있어요.", bad_slot: "슬롯을 선택해주세요." };
+      setLinkMsg(msgMap[reason] || "연결에 실패했어요.");
+      return;
+    }
+    try { localStorage.setItem(LS_CODE, data.couple_code); localStorage.setItem(LS_ME, data.slot); } catch (e) {}
+    setCode(data.couple_code); setMe(data.slot); setPage(data.slot);
+  };
+
+  const logoutAuth = async () => { await supabase.auth.signOut(); setSession(null); logout(); };
+
   useEffect(() => {
     try {
       const c = localStorage.getItem(LS_CODE); const m = localStorage.getItem(LS_ME); const n = localStorage.getItem(LS_NIGHT);
@@ -470,7 +524,7 @@ export default function Page() {
       if (error) { if (initial) setLoading(false); return; }
       const { nd, ng, ls } = parseRows(rows);
       if (initial) { setDays(nd); setGoals(ng); setLoading(false);
-        if (!rows || rows.length === 0) supabase.rpc("gs_kiss_award", { p_code: code, p_slot: me, p_delta: 120, p_reason: "welcome_kiss", p_ref_date: "2000-01-01" }).then(() => {});
+        if (!rows || rows.length === 0) supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: 120, p_reason: "welcome_kiss", p_ref_date: "2000-01-01" }).then(() => {});
       }
       else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
       setLastSeen(ls);
@@ -478,8 +532,8 @@ export default function Page() {
         supabase.rpc("gs_mileage_get", { p_code: code }),
         supabase.rpc("gs_catalog_get", { p_code: code }),
         supabase.rpc("gs_redeem_get", { p_code: code }),
-        supabase.rpc("gs_msg_get", { p_code: code, p_me: me }),
-        supabase.rpc("gs_qa_get", { p_code: code, p_me: me }),
+        supabase.rpc("gs2_msg_get", { p_code: code, p_me: me }),
+        supabase.rpc("gs2_qa_get", { p_code: code, p_me: me }),
         supabase.rpc("gs_inventory_get", { p_code: code }),
       ]);
       if (!alive) return;
@@ -499,7 +553,7 @@ export default function Page() {
   useEffect(() => {
     if (!code || loading || !me) return;
     const en = days[today()]?.[me];
-    const kissAward = (delta, reason, rd) => supabase.rpc("gs_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
+    const kissAward = (delta, reason, rd) => supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
     if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", today()); kissAward(POINTS.full, "daily", today()); }
     else if (hasEntry(en)) { award(me, POINTS.partial, "daily", today()); kissAward(POINTS.partial, "daily", today()); }
 
@@ -577,11 +631,11 @@ export default function Page() {
   const pushData = (slot, entry) => {
     const k = `${date}:${slot}`;
     if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
-    saveTimers.current[k] = setTimeout(() => { supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => {}); }, 600);
+    saveTimers.current[k] = setTimeout(() => { supabase.rpc("gs2_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => {}); }, 600);
   };
   const updateEntry = (slot, patch) => { if (slot !== me) return; setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; }); };
   const award = (slot, delta, reason, refDate) => {
-    supabase.rpc("gs_mileage_award", { p_code: code, p_slot: slot, p_delta: delta, p_reason: reason, p_ref_date: refDate }).then(() => {
+    supabase.rpc("gs2_mileage_award", { p_code: code, p_slot: slot, p_delta: delta, p_reason: reason, p_ref_date: refDate }).then(() => {
       supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
     });
   };
@@ -593,37 +647,37 @@ export default function Page() {
     if (trackMealsFor(slot)) return !!(en.meals && (en.meals.breakfast || en.meals.lunch || en.meals.dinner));
     return true;
   };
-  const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
+  const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs2_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
   const autoGrow = (ev) => { const el = ev.target; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
   const autoGrowRef = (el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } };
-  const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
+  const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs2_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
   const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
   const reloadSocial = () => {
-    supabase.rpc("gs_msg_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setMessages(data); });
-    supabase.rpc("gs_qa_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setAnswers(data); });
+    supabase.rpc("gs2_msg_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setMessages(data); });
+    supabase.rpc("gs2_qa_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setAnswers(data); });
   };
   const sendCheerMsg = (slot, text) => {
     setBurstKey((k) => k + 1);
-    supabase.rpc("gs_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: (getEntry(slot).cheers || 0) + 1 }).then(() => {});
+    supabase.rpc("gs2_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: (getEntry(slot).cheers || 0) + 1 }).then(() => {});
     setDays((prev) => { const day = { ...(prev[date] || {}) }; const en = { ...(day[slot] || blankEntry()) }; en.cheers = (en.cheers || 0) + 1; day[slot] = en; return { ...prev, [date]: day }; });
-    if (text && text.trim()) supabase.rpc("gs_msg_send", { p_code: code, p_from: me, p_to: slot, p_kind: "cheer", p_message: text.trim(), p_deliver: null }).then(reloadSocial);
+    if (text && text.trim()) supabase.rpc("gs2_msg_send", { p_code: code, p_from: me, p_to: slot, p_kind: "cheer", p_message: text.trim(), p_deliver: null }).then(reloadSocial);
     setShowCheerBox(false); setCheerText("");
   };
   const saveAnswer = () => {
     if (!qInput.trim()) return;
-    supabase.rpc("gs_qa_save", { p_code: code, p_slot: me, p_qdate: today(), p_answer: qInput.trim() }).then(() => { setQInput(""); reloadSocial(); fireCelebrate("답변 완료! 💕"); });
+    supabase.rpc("gs2_qa_save", { p_code: code, p_slot: me, p_qdate: today(), p_answer: qInput.trim() }).then(() => { setQInput(""); reloadSocial(); fireCelebrate("답변 완료! 💕"); });
   };
   const sendLetter = () => {
     if (!letterInput.msg.trim() || !letterInput.date) { setRedeemMsg("쪽지 내용과 배달 날짜를 정해줘요."); return; }
-    supabase.rpc("gs_msg_send", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_kind: "letter", p_message: letterInput.msg.trim(), p_deliver: letterInput.date }).then(() => { setLetterInput({ msg: "", date: "" }); reloadSocial(); fireCelebrate("쪽지를 숨겨뒀어요 💌"); });
+    supabase.rpc("gs2_msg_send", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_kind: "letter", p_message: letterInput.msg.trim(), p_deliver: letterInput.date }).then(() => { setLetterInput({ msg: "", date: "" }); reloadSocial(); fireCelebrate("쪽지를 숨겨뒀어요 💌"); });
   };
   const openMessage = (m) => { supabase.rpc("gs_msg_open", { p_code: code, p_id: m.id }).then(reloadSocial); setOpenLetter(m); };
   const sendGift = () => {
     const amt = parseInt(giftInput, 10);
     if (!amt || amt <= 0) { setRedeemMsg("선물할 포인트를 입력해줘요."); return; }
-    supabase.rpc("gs_mileage_gift", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_amount: amt }).then(({ data: ok }) => {
+    supabase.rpc("gs2_mileage_gift", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_amount: amt }).then(({ data: ok }) => {
       if (ok) { setGiftInput(""); setBigCeleb({ key: Date.now(), title: `${amt}p 선물 완료! 💝`, sub: `${names[me === "a" ? "b" : "a"]}에게 마음을 보냈어요` }); supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }); reloadSocial(); }
       else setRedeemMsg("포인트가 부족해요 🥲");
     });
@@ -636,7 +690,7 @@ export default function Page() {
     supabase.rpc("gs_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
   };
   const buyItem = (it) => {
-    supabase.rpc("gs_item_buy_kiss", { p_code: code, p_slot: me, p_item: it.id, p_price: it.price }).then(({ data: ok }) => {
+    supabase.rpc("gs2_item_buy_kiss", { p_code: code, p_slot: me, p_item: it.id }).then(({ data: ok }) => {
       if (ok) { reloadShopData(); setTryOn({}); saveAvatar({ [it.cat]: it.id }); setUnbox({ item: it }); }
       else setRedeemMsg("뽀뽀가 부족하거나 이미 보유 중이에요 🥲");
     });
@@ -644,7 +698,7 @@ export default function Page() {
   const sendItemGift = () => {
     const it = giftItem; if (!it) return;
     const pto = me === "a" ? "b" : "a";
-    supabase.rpc("gs_item_gift_kiss", { p_code: code, p_from: me, p_to: pto, p_item: it.id, p_price: it.price, p_title: `${it.icon} ${it.name}`, p_note: giftNote.trim() || null }).then(({ data: ok }) => {
+    supabase.rpc("gs2_item_gift_kiss", { p_code: code, p_from: me, p_to: pto, p_item: it.id, p_title: `${it.icon} ${it.name}`, p_note: giftNote.trim() || null }).then(({ data: ok }) => {
       if (ok) { setGiftItem(null); setGiftNote(""); reloadShopData(); setBigCeleb({ key: Date.now(), title: "선물 완료! 💝", sub: `${names[pto]}에게 ${it.name}을(를) 보냈어요` }); }
       else setRedeemMsg("뽀뽀가 부족하거나 상대가 이미 보유 중이에요 🥲");
     });
@@ -660,7 +714,7 @@ export default function Page() {
     const run = async () => {
       for (let i = 0; i < count; i++) {
         const guarantee = (count === 10 && i === 9) ? 3 : null; // 10연차 마지막은 에픽↑ 보장
-        const { data } = await supabase.rpc("gs_gacha_kiss", { p_code: code, p_slot: me, p_cost: cost / count, p_pool: gachaPool, p_guarantee: guarantee });
+        const { data } = await supabase.rpc("gs2_gacha", { p_code: code, p_slot: me, p_cost: cost / count, p_guarantee: guarantee, p_kiss: true });
         if (data && data.ok) results.push(data); else { break; }
       }
       const [{ data: inv }, { data: mrows }] = await Promise.all([
@@ -834,7 +888,29 @@ export default function Page() {
   const charOf = (slot) => (goals[slot] && goals[slot].charId) || (slot === "a" ? "fire" : "seal");
   const wrapStyle = ready ? themeVars(T[page || "a"], night) : themeVars(THEME.a, false);
 
-  if (!ready) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
+  if (!ready || !authChecked) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
+
+  if (!code && session) {
+    // Google 로그인은 됐는데 아직 커플코드에 연결 안 된 상태
+    return (
+      <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
+        <style>{css}</style>
+        <div className="td-login">
+          <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
+          <h1>거의 다 왔어요</h1>
+          <p>{session.user.email}로 로그인했어요. 기존 공유 코드를 입력해서 연결해주세요.</p>
+          <input className="td-input" placeholder="공유 코드 (예: tessa-jiin-93f2k)" value={linkCodeInput} onChange={(e) => setLinkCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && linkCouple()} />
+          <div className="td-whopick">
+            <span>나는</span>
+            {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (linkSlotInput === p ? " on" : "")} onClick={() => setLinkSlotInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
+          </div>
+          <button className="td-loginbtn" onClick={linkCouple} disabled={linking}>{linking ? "연결 중…" : "연결하기"}</button>
+          {linkMsg && <small className="td-loginhint" style={{ color: "#e55" }}>{linkMsg}</small>}
+          <small className="td-loginhint" onClick={logoutAuth} style={{ cursor: "pointer", textDecoration: "underline" }}>다른 계정으로 로그인</small>
+        </div>
+      </div>
+    );
+  }
 
   if (!code) {
     return (
@@ -851,6 +927,11 @@ export default function Page() {
           </div>
           <button className="td-loginbtn" onClick={login}>시작하기</button>
           <small className="td-loginhint">같은 코드를 두 사람이 입력하면 연결돼요.</small>
+          <div className="td-loginor"><span>또는</span></div>
+          <button className="td-googlebtn" onClick={loginWithGoogle}>
+            <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.66 9c0-.59.1-1.17.29-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
+            Google로 계속하기
+          </button>
         </div>
       </div>
     );
@@ -1551,6 +1632,9 @@ const css = `
 .td-whobtn.on{ background:var(--tc); border-color:var(--tc); color:#fff; }
 .td-loginbtn{ width:100%; margin-top:8px; padding:14px; border:none; border-radius:14px; background:var(--c1); color:#fff; font-family:'Jua'; font-size:17px; cursor:pointer; }
 .td-loginhint{ display:block; margin-top:12px; color:var(--muted); font-size:12px; }
+.td-loginor{ display:flex; align-items:center; gap:10px; margin:16px 0 10px; color:var(--muted); font-size:12px; }
+.td-loginor:before, .td-loginor:after{ content:""; flex:1; height:1px; background:var(--border,#eee); }
+.td-googlebtn{ width:100%; padding:12px; border:1px solid var(--border,#ddd); border-radius:14px; background:#fff; color:#3c4043; font-family:inherit; font-size:15px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; }
 
 .td-quotecard{ display:flex; align-items:flex-start; gap:9px; background:var(--glass); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border:1px solid var(--line); border-radius:16px; padding:12px 14px; margin-bottom:12px; }
 .td-quoteicon{ font-size:16px; flex:0 0 auto; margin-top:1px; }
