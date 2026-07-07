@@ -531,10 +531,21 @@ export default function Page() {
   const [pendingInvite, setPendingInvite] = useState(null); // {code, slot}
 
   const createCouple = async () => {
+    if (!window.confirm("새 커플을 만들면 새 코드가 생성돼요.\n\n이미 쓰던 기록이 있다면 '새 커플 만들기'가 아니라, 위에 기존 공유 코드를 입력해서 '코드로 연결하기'를 눌러주세요!\n\n정말 새로 만들까요?")) return;
     setLinking(true); setLinkMsg("");
     const { data, error } = await supabase.rpc("gs2_create_couple", { p_slot: linkSlotInput });
     setLinking(false);
-    if (error || !data || !data.ok) { setLinkMsg(data && data.reason === "already_linked" ? "이미 연결된 계정이에요." : "커플 생성에 실패했어요."); return; }
+    if (error || !data || !data.ok) {
+      if (data && data.reason === "has_history") {
+        // 예전에 쓰던 커플이 있음 → 새로 만들지 말고 복귀 유도
+        setLinkCodeInput(data.couple_code);
+        setLinkSlotInput(data.slot);
+        setLinkMsg(`예전에 쓰던 코드(${data.couple_code})가 있어요! 위 '코드로 연결하기'를 눌러 기존 기록을 이어가세요.`);
+        return;
+      }
+      setLinkMsg(data && data.reason === "already_linked" ? "이미 연결된 계정이에요." : "커플 생성에 실패했어요.");
+      return;
+    }
     try { localStorage.setItem(LS_CODE, data.couple_code); localStorage.setItem(LS_ME, data.slot); } catch (e) {}
     setPendingInvite({ code: data.couple_code, slot: data.slot });
   };
@@ -1040,7 +1051,7 @@ export default function Page() {
             <div className="td-loginor"><span>또는</span></div>
             <button className="td-googlebtn" onClick={createCouple} disabled={linking}>💞 새 커플 만들기 (코드 자동 생성)</button>
           </>)}
-          {linkMsg && <small className="td-loginhint" style={{ color: "#e55" }}>{linkMsg}</small>}
+          {linkMsg && <small className="td-loginhint" style={{ color: linkMsg.includes("예전에") ? "var(--c1)" : "#e55" }}>{linkMsg}</small>}
           <small className="td-loginhint" onClick={logoutAuth} style={{ cursor: "pointer", textDecoration: "underline" }}>다른 계정으로 로그인</small>
         </div>
       </div>
