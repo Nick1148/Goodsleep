@@ -1145,6 +1145,7 @@ export default function Page() {
             <span className="td-milebadge" onClick={() => setView(view === "style" ? "style" : "reward")}>{view === "style" ? <>💋 <CountUp value={myKiss} /></> : <>🪙 <CountUp value={myBal} /></>}</span>
             <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
             <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
+            <button className="td-nightbtn" onClick={() => { if (window.confirm("로그아웃할까요?")) logoutAuth(); }} aria-label="로그아웃">🚪</button>
           </div>
         </div>
         {pushMsg && <div className="td-pushmsg" onClick={() => setPushMsg("")}>{pushMsg}</div>}
