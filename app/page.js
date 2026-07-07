@@ -771,7 +771,7 @@ export default function Page() {
   const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs2_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
   const autoGrow = (ev) => { const el = ev.target; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
-  const autoGrowRef = (el) => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } };
+  const autoGrowRef = (el) => { if (el && !el.dataset.grown) { el.dataset.grown = "1"; requestAnimationFrame(() => { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }); } };
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs2_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
   const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs2_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs2_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
@@ -1878,7 +1878,8 @@ const css = `
 .td-mealinput{ margin-top:0; }
 .td-gratblock{ background:var(--grat); border:2px solid var(--gratline); border-radius:15px; padding:13px; }
 .td-gratlabel{ color:var(--grattxt); } .td-gratinput{ margin-top:8px; } .td-gratinput:first-of-type{ margin-top:0; }
-.td-area{ width:100%; padding:11px 13px; border:2px solid var(--soft); border-radius:13px; font-family:'Gowun Dodum'; font-size:15px; resize:vertical; background:var(--field); color:var(--ink); }
+.td-area{ width:100%; padding:11px 13px; border:1.5px solid var(--line); border-radius:var(--r-sm); font-family:'Gowun Dodum'; font-size:15px; resize:vertical; background:var(--field); color:var(--ink); box-sizing:border-box; outline:none; transition:border-color .2s; }
+.td-area:focus{ border-color:var(--c1); }
 .td-cheerrow{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top:4px; }
 .td-cheercount{ font-family:'Jua'; font-size:13px; color:var(--c2); }
 .td-cheerbtn{ position:relative; margin-left:auto; border:2px solid var(--c1); color:var(--c2); background:var(--card); padding:10px 16px; border-radius:999px; font-family:'Jua'; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:8px; overflow:visible; }
@@ -2019,7 +2020,7 @@ const css = `
 .td-ledgerdate{ font-size:11px; color:var(--muted); width:40px; flex:0 0 auto; font-family:'Jua'; }
 .td-ledgerlabel{ flex:1; }
 .td-ledgerrow .plus{ color:#3DAE7B; font-family:'Jua'; } .td-ledgerrow .minus{ color:#DC6B57; font-family:'Jua'; }
-.td-autogrow{ resize:none; overflow:hidden; min-height:44px; line-height:1.45; white-space:pre-wrap; word-break:break-word; font-family:'Gowun Dodum'; }
+.td-autogrow{ resize:none; overflow:hidden; min-height:44px; line-height:1.45; white-space:pre-wrap; word-break:break-word; font-family:'Gowun Dodum'; field-sizing:content; box-sizing:border-box; }
 .td-hero{ position:relative; }
 .td-ring{ position:absolute; top:14px; right:14px; width:46px; height:46px; }
 .td-bigsleep{ font-size:27px !important; font-variant-numeric:tabular-nums; }
