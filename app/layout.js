@@ -1,6 +1,6 @@
 export const metadata = {
   title: "우리의 하루",
-  description: "테사호드관 & 지인의 데일리 트래커",
+  description: "둘만의 수면·컨디션을 함께 기록하는 커플 웰니스 앱",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

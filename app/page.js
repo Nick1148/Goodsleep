@@ -434,6 +434,42 @@ export default function Page() {
   const [linking, setLinking] = useState(false);
   const [inviteCode, setInviteCode] = useState("");
 
+  // ---- PWA 홈 화면 설치 유도 ----
+  const [installEvt, setInstallEvt] = useState(null);
+  const [showInstall, setShowInstall] = useState(false);
+  const [iosGuide, setIosGuide] = useState(false);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone;
+    if (isStandalone) return; // 이미 설치됨
+    let dismissed = false;
+    try { dismissed = localStorage.getItem("gs_install_dismissed") === "1"; } catch (e) {}
+    if (dismissed) return;
+
+    const ua = window.navigator.userAgent || "";
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+    const isSafari = isIOS && /safari/i.test(ua) && !/crios|fxios/i.test(ua);
+
+    const handler = (e) => { e.preventDefault(); setInstallEvt(e); setShowInstall(true); };
+    window.addEventListener("beforeinstallprompt", handler);
+
+    // iOS는 beforeinstallprompt 미지원 → Safari면 수동 안내 노출
+    if (isIOS && isSafari) { setShowInstall(true); setIosGuide(true); }
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const doInstall = async () => {
+    if (installEvt) {
+      installEvt.prompt();
+      try { await installEvt.userChoice; } catch (e) {}
+      setInstallEvt(null); setShowInstall(false);
+    } else if (iosGuide) {
+      // 안내 모달만 토글 (배너 자체가 안내)
+    }
+  };
+  const dismissInstall = () => { setShowInstall(false); try { localStorage.setItem("gs_install_dismissed", "1"); } catch (e) {} };
+
   useEffect(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -977,11 +1013,26 @@ export default function Page() {
 
   if (!ready || !authChecked) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
 
+  const installBanner = showInstall ? (
+    <div className="td-install">
+      {iosGuide ? (
+        <span className="td-installtxt">📲 홈 화면에 추가하려면: 하단 <b>공유</b> → <b>홈 화면에 추가</b></span>
+      ) : (
+        <span className="td-installtxt">📲 앱처럼 홈 화면에 추가할까요?</span>
+      )}
+      <div className="td-installbtns">
+        {!iosGuide && <button className="td-installadd" onClick={doInstall}>추가</button>}
+        <button className="td-installx" onClick={dismissInstall}>✕</button>
+      </div>
+    </div>
+  ) : null;
+
   if (!session) {
     // 앱 시작: 로그인 화면 (계정 필수, 레거시 코드 로그인은 접이식 임시 제공)
     return (
       <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
         <style>{css}</style>
+        {installBanner}
         <div className="td-login">
           <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
           <h1>우리의 하루</h1>
@@ -1754,6 +1805,11 @@ const css = `
 .td-whobtn.on{ background:var(--tc); border-color:var(--tc); color:#fff; }
 .td-loginbtn{ width:100%; margin-top:8px; padding:14px; border:none; border-radius:14px; background:var(--c1); color:#fff; font-family:'Jua'; font-size:17px; cursor:pointer; }
 .td-loginhint{ display:block; margin-top:12px; color:var(--muted); font-size:12px; }
+.td-install{ display:flex; align-items:center; justify-content:space-between; gap:8px; max-width:380px; margin:10px auto 0; background:var(--card); border-radius:14px; padding:10px 14px; box-shadow:0 4px 14px var(--shadow); position:relative; z-index:2; }
+.td-installtxt{ font-size:12.5px; color:var(--fg,#444); line-height:1.4; }
+.td-installbtns{ display:flex; align-items:center; gap:6px; flex-shrink:0; }
+.td-installadd{ border:none; background:var(--c1); color:#fff; font-family:'Jua'; font-size:13px; padding:6px 14px; border-radius:10px; cursor:pointer; }
+.td-installx{ border:none; background:transparent; color:var(--muted); font-size:15px; cursor:pointer; padding:4px; }
 .td-loginor{ display:flex; align-items:center; gap:10px; margin:16px 0 10px; color:var(--muted); font-size:12px; }
 .td-loginor:before, .td-loginor:after{ content:""; flex:1; height:1px; background:var(--border,#eee); }
 .td-googlebtn{ width:100%; padding:12px; border:1px solid var(--border,#ddd); border-radius:14px; background:#fff; color:#3c4043; font-family:inherit; font-size:15px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; }
