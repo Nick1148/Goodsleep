@@ -675,7 +675,7 @@ export default function Page() {
     if (!code || loading || !me) return;
     const en = days[today()]?.[me];
     const kissAward = (delta, reason, rd) => supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
-    if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", today()); kissAward(POINTS.full, "daily", today()); }
+    if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", today()); kissAward(POINTS.full, "daily", today()); supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "daily", p_ref_date: today() }).then(() => {}); }
     else if (hasEntry(en)) { award(me, POINTS.partial, "daily", today()); kissAward(POINTS.partial, "daily", today()); }
 
     if (new Date().getDay() === 0) {
@@ -749,10 +749,16 @@ export default function Page() {
   const logout = () => { try { localStorage.removeItem(LS_CODE); localStorage.removeItem(LS_ME); } catch (e) {} setCode(null); setDays({}); setCodeInput(""); };
 
   const getEntry = (slot) => (days[date] && days[date][slot]) || blankEntry();
+  const [saveFailed, setSaveFailed] = useState(false);
   const pushData = (slot, entry) => {
     const k = `${date}:${slot}`;
     if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
-    saveTimers.current[k] = setTimeout(() => { supabase.rpc("gs2_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => {}); }, 600);
+    saveTimers.current[k] = setTimeout(() => {
+      supabase.rpc("gs2_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(({ error }) => {
+        if (error) setSaveFailed(true);
+        else setSaveFailed(false);
+      }).catch(() => setSaveFailed(true));
+    }, 600);
   };
   const updateEntry = (slot, patch) => { if (slot !== me) return; setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; }); };
   const award = (slot, delta, reason, refDate) => {
@@ -788,7 +794,7 @@ export default function Page() {
   };
   const saveAnswer = () => {
     if (!qInput.trim()) return;
-    supabase.rpc("gs2_qa_save", { p_code: code, p_slot: me, p_qdate: today(), p_answer: qInput.trim() }).then(() => { setQInput(""); reloadSocial(); fireCelebrate("답변 완료! 💕"); });
+    supabase.rpc("gs2_qa_save", { p_code: code, p_slot: me, p_qdate: today(), p_answer: qInput.trim() }).then(() => { setQInput(""); reloadSocial(); fireCelebrate("답변 완료! 💕"); supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "qa", p_ref_date: today() }).then(() => {}); });
   };
   const sendLetter = () => {
     if (!letterInput.msg.trim() || !letterInput.date) { setRedeemMsg("쪽지 내용과 배달 날짜를 정해줘요."); return; }
@@ -1199,6 +1205,7 @@ export default function Page() {
       <div className="td-glow" />
       <div className="td-app">
 
+        {saveFailed && <div className="td-savefail" onClick={() => { setSaveFailed(false); const en = (days[date] || {})[me]; if (en) pushData(me, en); }}>⚠️ 저장이 안 됐어요 — 여기를 눌러 다시 시도</div>}
         <div className="td-topbar">
           <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}<small>{new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })} · 오늘</small></span>
           <div className="td-topbtns">
@@ -1221,6 +1228,14 @@ export default function Page() {
         )}
 
         {view === "today" && (<>
+          {mine && Object.keys(days).filter((d) => !d.startsWith("__")).length === 0 && (
+            <div className="td-card td-onboard">
+              <div className="td-onboardhead">🌱 우리의 하루, 시작해볼까요?</div>
+              <div className="td-onboardstep"><b>1</b><span>아래에서 <b>잠든 시간·기분</b>만 기록해도 포인트를 받아요 (다 채우면 보너스!)</span></div>
+              <div className="td-onboardstep"><b>2</b><span><b>오늘의 질문</b>에 답하면 연인의 답이 열려요 💌</span></div>
+              <div className="td-onboardstep"><b>3</b><span>🔔 버튼으로 <b>알림</b>을 켜면 연인의 기록 소식을 받아요</span></div>
+            </div>
+          )}
           {mine && (
             <div className="td-qcard td-card">
               <div className="td-qhead">💕 오늘의 질문</div>
@@ -1258,6 +1273,7 @@ export default function Page() {
           </div>
 
           <div className="td-hero td-card">
+            {mine && ringDone > 0 && ringDone < ringTotal && <div className="td-lighthint">조금만 기록해도 +2p, 다 채우면 +10p 💪</div>}
             <svg className="td-ring" viewBox="0 0 46 46" aria-hidden="true">
               <circle cx="23" cy="23" r="18" fill="none" stroke="var(--soft)" strokeWidth="5" />
               <circle cx="23" cy="23" r="18" fill="none" stroke="var(--c1)" strokeWidth="5" strokeLinecap="round" strokeDasharray={2 * Math.PI * 18} strokeDashoffset={2 * Math.PI * 18 * (1 - ringDone / Math.max(1, ringTotal))} transform="rotate(-90 23 23)" style={{ transition: "stroke-dashoffset .6s" }} />
@@ -1795,6 +1811,12 @@ const css = `
 .td-topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap:var(--sp3); padding:2px 4px var(--sp4); }
 .td-topbtns{ display:flex; gap:var(--sp2); align-items:center; flex-shrink:0; }
 .td-pushmsg{ background:var(--card); border:1px solid var(--line); color:var(--ink); font-size:13px; text-align:center; padding:9px 12px; border-radius:var(--r-sm); margin-bottom:10px; cursor:pointer; box-shadow:var(--sh-soft); }
+.td-savefail{ background:#FFF3F0; border:1.5px solid #F5C9BC; color:#C0553A; font-size:13px; text-align:center; padding:10px 12px; border-radius:var(--r-sm); margin-bottom:10px; cursor:pointer; font-family:'Gowun Dodum'; }
+.td-onboard{ padding:var(--sp4); margin-bottom:var(--sp3); border:1.5px dashed var(--c1); }
+.td-onboardhead{ font-family:'Jua'; font-size:15px; color:var(--c1); margin-bottom:var(--sp3); }
+.td-onboardstep{ display:flex; gap:10px; align-items:flex-start; margin-bottom:var(--sp2); font-size:13px; line-height:1.5; color:var(--ink); }
+.td-onboardstep > b{ flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--soft); color:var(--c1); font-family:'Jua'; font-size:12px; display:flex; align-items:center; justify-content:center; }
+.td-lighthint{ position:absolute; top:10px; left:14px; font-size:11px; color:var(--muted); }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
 .td-nightbtn{ width:36px; height:36px; border:none; border-radius:50%; background:var(--card); box-shadow:var(--sh-soft); font-size:15px; cursor:pointer; flex-shrink:0; }
@@ -1830,7 +1852,7 @@ const css = `
 .td-datenav button:disabled{ opacity:.35; }
 .td-date{ text-align:center; } .td-date b{ font-family:'Jua'; font-size:20px; display:block; line-height:1.15; } .td-date small{ font-size:12px; color:var(--muted); }
 
-.td-hero{ padding:var(--sp4); margin-bottom:var(--sp3); }
+.td-hero{ padding:var(--sp4); margin-bottom:var(--sp3); position:relative; }
 .td-buddywrap{ display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:12px; }
 .td-buddy{ position:relative; width:88px; height:88px; border-radius:50%; background:var(--sky); display:flex; align-items:center; justify-content:center; padding:9px; overflow:visible; }
 .td-buddy img,.td-buddy svg{ border-radius:50%; }

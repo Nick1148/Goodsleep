@@ -73,6 +73,23 @@ async function sendMessagePushes() {
   }
 }
 
+// 상대 활동 알림: 연인이 오늘 기록/질문답변을 남기면 상대에게 알림
+async function sendActivityPushes() {
+  const rows = await rpc("gs_activity_unnotified", { p_secret: BACKUP_SECRET });
+  if (!rows || !rows.length) return;
+  const subs = await rpc("gs_push_targets", { p_secret: BACKUP_SECRET });
+  const BODY = {
+    daily: "💛 연인이 오늘의 기록을 남겼어요! 나도 남겨볼까요?",
+    qa: "💬 연인이 오늘의 질문에 답했어요! 확인해보세요",
+  };
+  for (const a of rows) {
+    const partnerSlot = a.actor_slot === "a" ? "b" : "a";
+    const target = (subs || []).find((s) => s.couple_code === a.couple_code && s.slot === partnerSlot);
+    if (target) await send(target, { title: "우리의 하루", body: BODY[a.kind] || BODY.daily, tag: "activity" });
+    await rpc("gs_activity_mark_notified", { p_secret: BACKUP_SECRET, p_id: a.id });
+  }
+}
+
 async function send(row, msg) {
   try {
     await webpush.sendNotification(
@@ -169,4 +186,5 @@ function quoteFor(slot, localDate, dowMon, days, goals) {
   console.log(`done. sent=${sent}, subscribers=${rows.length}`);
   await sendRedemptionPushes();
   await sendMessagePushes();
+  await sendActivityPushes();
 })().catch((e) => { console.error(e); process.exit(1); });
