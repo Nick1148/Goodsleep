@@ -22,7 +22,7 @@ const sleepMood = (m) => {
   return { emoji: "💤", msg: "든든하게 충전 완료!", sleepy: false };
 };
 const greeting = () => { const h = new Date().getHours(); if (h < 6) return "늦은 밤이야"; if (h < 12) return "좋은 아침이야"; if (h < 18) return "좋은 오후야"; if (h < 22) return "좋은 저녁이야"; return "좋은 밤이야"; };
-const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, mood: 0, gratitude: ["", "", ""], reflection: "" });
+const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, mood: 0, gratitude: ["", "", ""], reflection: "", pg: 0 });
 const blankEntry = () => ({ ...FIELDS(), cheers: 0 });
 const dataForDb = (e) => { const { cheers, ...rest } = e; return rest; };
 const entryFromRow = (row) => { const d = row.data || {}; return { ...FIELDS(), ...d, meals: { breakfast: "", lunch: "", dinner: "", ...(d.meals || {}) }, cheers: row.cheers ?? 0 }; };
@@ -922,12 +922,24 @@ export default function Page() {
 
   const weekDates = (ref) => { const [y, m, d] = ref.split("-").map(Number); const dt = new Date(y, m - 1, d); const dow = (dt.getDay() + 6) % 7; const mon = new Date(y, m - 1, d - dow); return [...Array(7)].map((_, i) => ymd(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i))); };
   const metricsFor = (slot, weekArr) => {
-    let durs = [], beds = [], exDays = 0, logged = 0;
-    weekArr.forEach((dk) => { if (dk > today()) return; const e = days[dk]?.[slot]; if (!e) return; if (hasEntry(e)) logged++; const mm = sleepMinutes(e.bed, e.wake); if (mm) { durs.push(mm); beds.push(bedMin(e.bed)); } if (e.exercise) exDays++; });
+    let durs = [], beds = [], exDays = 0, logged = 0, pgSum = 0, pgDays = 0;
+    weekArr.forEach((dk) => { if (dk > today()) return; const e = days[dk]?.[slot]; if (!e) return; if (hasEntry(e)) logged++; const mm = sleepMinutes(e.bed, e.wake); if (mm) { durs.push(mm); beds.push(bedMin(e.bed)); } if (e.exercise) exDays++; const pgv = Number(e.pg) || 0; if (pgv > 0) { pgSum += pgv; pgDays++; } });
     const avg = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null;
     const spread = beds.length >= 2 ? Math.max(...beds) - Math.min(...beds) : null;
-    return { durs, beds, exDays, logged, avg, spread, nSleep: durs.length };
+    return { durs, beds, exDays, logged, avg, spread, nSleep: durs.length, pgSum, pgDays };
   };
+  // 개인 목표: { label, emoji, unit, weeklyLimit, countLimit(0=제한없음) }
+  const pgoalOf = (slot) => (goals[slot] && goals[slot].pgoal) || null;
+  const pgStatus = (pg, m) => {
+    if (!pg) return null;
+    const overAmt = m.pgSum > pg.weeklyLimit;
+    const overCnt = pg.countLimit > 0 && m.pgDays > pg.countLimit;
+    const nearAmt = !overAmt && m.pgSum > pg.weeklyLimit * 0.8;
+    if (overAmt || overCnt) return { txt: "한도 초과", c: "#DC6B57" };
+    if (nearAmt) return { txt: "한도 임박", c: "#E0A23B" };
+    return { txt: "순항 중", c: "#3DAE7B" };
+  };
+  const fmtPg = (pg, v) => pg.unit === "분" ? (v >= 60 ? `${Math.floor(v / 60)}시간${v % 60 ? " " + (v % 60) + "분" : ""}` : `${v}분`) : `${v}${pg.unit}`;
   const regLabel = (spread) => { if (spread == null) return { txt: "기록 부족", dots: 0, c: "#B0A59C" }; if (spread <= 60) return { txt: "아주 규칙적", dots: 5, c: "#3DAE7B" }; if (spread <= 90) return { txt: "규칙적", dots: 4, c: "#6FB98F" }; if (spread <= 120) return { txt: "보통", dots: 3, c: "#E0A23B" }; if (spread <= 180) return { txt: "조금 들쭉날쭉", dots: 2, c: "#E08A3B" }; return { txt: "들쭉날쭉", dots: 1, c: "#DC6B57" }; };
   const makeFeedback = (cur, prev, goal) => {
     const good = [], tip = [];
@@ -1309,9 +1321,11 @@ export default function Page() {
 
           <div className="td-statstrip td-card">
             <div className="td-stat">
-              <span>😴 규칙성</span>
-              <div className="td-progdots">{[1, 2, 3, 4, 5].map((i) => <i key={i} style={{ background: i <= reg.dots ? reg.c : "var(--soft)" }} />)}</div>
-              <b style={{ color: reg.c }}>{reg.txt}</b>
+              {(() => { const pg = pgoalOf(page); if (!pg) return (<><span>🎯 개인 목표</span><b style={{ color: "var(--muted)", fontSize: 11 }}>설정에서 만들어보세요</b></>); const st = pgStatus(pg, cur); const pct = Math.min(100, Math.round((cur.pgSum / pg.weeklyLimit) * 100)); return (<>
+                <span>{pg.emoji} {pg.label}</span>
+                <div className="td-progbar"><div className="td-progfill" style={{ width: pct + "%", background: st.c }} /></div>
+                <b style={{ color: st.c }}>{fmtPg(pg, cur.pgSum)}/{fmtPg(pg, pg.weeklyLimit)}{pg.countLimit > 0 ? ` · ${cur.pgDays}/${pg.countLimit}회` : ""}</b>
+              </>); })()}
             </div>
             <div className="td-stat">
               <span>🧾 수면 빚</span>
@@ -1327,6 +1341,8 @@ export default function Page() {
 
           <div className="td-card td-maincard">
             {[
+              ...(pgoalOf(page) ? [(() => { const pg = pgoalOf(page); return { k: "pg", label: `${pg.emoji} ${pg.label}`, filled: Number(e.pg) > 0, sum: Number(e.pg) > 0 ? fmtPg(pg, Number(e.pg)) : "오늘 0 (좋아요!)",
+                body: (<div className="td-mealrow"><span>오늘 {pg.label}</span><input className="td-input td-mealinput" type="number" min="0" inputMode="numeric" placeholder={`0 (${pg.unit})`} value={e.pg || ""} disabled={!mine} onChange={(ev) => updateEntry(page, { pg: ev.target.value === "" ? 0 : Math.max(0, parseInt(ev.target.value) || 0) })} /></div>) }; })()] : []),
               { k: "ex", label: "💪 운동", filled: !!e.exercise, sum: e.exercise ? ("완료" + (e.exNote ? " · " + e.exNote : "")) : "미기록",
                 body: (<>
                   <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={onExercise} disabled={!mine}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
@@ -1425,11 +1441,44 @@ export default function Page() {
               <div className="td-goalrow"><label>목표 수면(시간)</label><input type="number" step="0.5" min="4" max="12" value={g.sleepHours} disabled={!mine} onChange={(ev) => saveGoal(page, { sleepHours: parseFloat(ev.target.value) || 7.5 })} /></div>
               <div className="td-goalrow"><label>주간 운동(회)</label><input type="number" min="1" max="7" value={g.exerciseWeekly} disabled={!mine} onChange={(ev) => saveGoal(page, { exerciseWeekly: parseInt(ev.target.value) || 4 })} /></div>
               <div className="td-goalrow td-goaldays"><label>운동 요일</label><div className="td-daychips">{DOW_MON.map((d, i) => { const on = (g.exerciseDays || []).includes(i); return <button key={i} className={"td-daychip" + (on ? " on" : "")} disabled={!mine} onClick={() => { const arr = new Set(g.exerciseDays || []); on ? arr.delete(i) : arr.add(i); saveGoal(page, { exerciseDays: [...arr] }); }}>{d}</button>; })}</div></div>
+              <div className="td-goalsec">🎯 개인 목표 (주간 한도)</div>
+              {!g.pgoal ? (
+                <button className="td-goalbtn" disabled={!mine} onClick={() => saveGoal(page, { pgoal: { emoji: "🎯", label: "나의 목표", unit: "분", weeklyLimit: 420, countLimit: 0 } })}>+ 개인 목표 만들기</button>
+              ) : (<>
+                <div className="td-goalrow"><label>이름</label><input type="text" value={g.pgoal.label} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, label: ev.target.value } })} /></div>
+                <div className="td-goalrow"><label>이모지</label><input type="text" maxLength="2" value={g.pgoal.emoji} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, emoji: ev.target.value } })} /></div>
+                <div className="td-goalrow"><label>단위</label><input type="text" maxLength="6" value={g.pgoal.unit} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, unit: ev.target.value } })} /></div>
+                <div className="td-goalrow"><label>주간 한도 ({g.pgoal.unit})</label><input type="number" min="1" value={g.pgoal.weeklyLimit} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, weeklyLimit: parseInt(ev.target.value) || 1 } })} /></div>
+                <div className="td-goalrow"><label>주간 횟수 한도 (0=없음)</label><input type="number" min="0" max="7" value={g.pgoal.countLimit || 0} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, countLimit: parseInt(ev.target.value) || 0 } })} /></div>
+                {mine && <button className="td-goalbtn" style={{ color: "#DC6B57" }} onClick={() => { if (window.confirm("개인 목표를 삭제할까요?")) saveGoal(page, { pgoal: null }); }}>목표 삭제</button>}
+              </>)}
             </div>
           )}
         </>)}
 
         {view === "review" && (<>
+          <div className="td-review td-card">
+            <h3>🗂️ 주차별 기록</h3>
+            {(() => {
+              const pg = pgoalOf(page);
+              const rows = [0, 1, 2, 3].map((wAgo) => {
+                const ref = addDays(today(), -7 * wAgo);
+                const arr = weekDates(ref);
+                const m = metricsFor(page, arr);
+                const sleepDays = arr.filter((dk) => { if (dk > today()) return false; const en = days[dk]?.[page]; const mm = en ? sleepMinutes(en.bed, en.wake) : null; return mm != null && mm >= (g.sleepHours - 0.5) * 60; }).length;
+                const st = pg ? pgStatus(pg, m) : null;
+                const label = wAgo === 0 ? "이번 주" : wAgo === 1 ? "지난주" : `${wAgo}주 전`;
+                return { label, sleepDays, m, st };
+              });
+              return rows.map((r, i) => (
+                <div key={i} className="td-weekrow">
+                  <b className="td-weeklb">{r.label}</b>
+                  <span>😴 수면목표 {r.sleepDays}일</span>
+                  {pg ? <span style={{ color: r.st.c }}>{pg.emoji} {fmtPg(pg, r.m.pgSum)}{pg.countLimit > 0 ? ` · ${r.m.pgDays}회` : ""} <b>{r.m.pgDays === 0 && r.m.pgSum === 0 && i > 0 ? "기록 없음" : r.st.txt}</b></span> : <span style={{ color: "var(--muted)" }}>개인 목표 없음</span>}
+                </div>
+              ));
+            })()}
+          </div>
           <div className="td-review td-card">
             <h3>📊 {names[page]} 이번 주 리뷰</h3>
             {headline && !fb.empty && <p className="td-headline">{headline}</p>}
@@ -1494,14 +1543,14 @@ export default function Page() {
               {monthCells.map((dk, i) => {
                 if (!dk) return <span key={"e" + i} className="td-mcell empty" />;
                 const en = days[dk]?.[page]; const mm = en ? sleepMinutes(en.bed, en.wake) : null;
-                const slept = mm != null; const goalMet = mm != null && mm >= (g.sleepHours - 0.5) * 60; const ex = en?.exercise;
+                const slept = mm != null; const goalMet = mm != null && mm >= (g.sleepHours - 0.5) * 60; const pgRec = Number(en?.pg) > 0;
                 const dnum = parseInt(dk.split("-")[2], 10);
                 return (<button key={dk} className={"td-mcell" + (dk === date ? " sel" : "")} onClick={() => { setDate(dk); setView("today"); }} style={{ background: goalMet ? "var(--soft)" : (slept ? "var(--soft2)" : "transparent") }}>
-                  <span className="td-mnum">{dnum}</span>{ex && <span className="td-mdot" style={{ background: t.c1 }} />}
+                  <span className="td-mnum">{dnum}</span>{pgRec && <span className="td-mdot" style={{ background: t.c1 }} />}
                 </button>);
               })}
             </div>
-            <div className="td-mlegend"><span><i style={{ background: "var(--soft)" }} />수면목표</span><span><i className="dot" style={{ background: t.c1 }} />운동</span></div>
+            <div className="td-mlegend"><span><i style={{ background: "var(--soft)" }} />수면목표</span><span><i className="dot" style={{ background: t.c1 }} />{pgoalOf(page) ? `${pgoalOf(page).emoji} ${pgoalOf(page).label}` : "개인 목표"}</span></div>
           </div>
         )}
 
@@ -1817,6 +1866,10 @@ const css = `
 .td-onboardstep{ display:flex; gap:10px; align-items:flex-start; margin-bottom:var(--sp2); font-size:13px; line-height:1.5; color:var(--ink); }
 .td-onboardstep > b{ flex-shrink:0; width:20px; height:20px; border-radius:50%; background:var(--soft); color:var(--c1); font-family:'Jua'; font-size:12px; display:flex; align-items:center; justify-content:center; }
 .td-lighthint{ position:absolute; top:10px; left:14px; font-size:11px; color:var(--muted); }
+.td-goalsec{ font-family:'Jua'; font-size:13px; color:var(--c1); margin:var(--sp4) 0 var(--sp2); padding-top:var(--sp3); border-top:1px solid var(--line); }
+.td-weekrow{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:12.5px; color:var(--ink); flex-wrap:wrap; }
+.td-weekrow:last-child{ border-bottom:none; }
+.td-weeklb{ font-family:'Jua'; font-size:13px; flex:0 0 56px; }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
 .td-nightbtn{ width:36px; height:36px; border:none; border-radius:50%; background:var(--card); box-shadow:var(--sh-soft); font-size:15px; cursor:pointer; flex-shrink:0; }
