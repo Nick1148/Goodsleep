@@ -66,6 +66,7 @@ const COUPLE_Q = [
   "함께 만들어가고 싶은 우리의 규칙은?", "상대의 어떤 취향을 응원해?", "오늘 상대 덕분에 나아진 기분이 있다면?", "서로에게 첫인상은 어땠을까?", "상대와 오래 하고 싶은 약속 하나는?",
 ];
 const CHEER_PRESETS = ["오늘도 고생했어 🤍", "잘 자, 내 꿈 꿔 🌙", "네가 최고야 ✨", "보고 싶다 🥰", "오늘 하루도 예뻤어", "푹 쉬어, 사랑해 💗", "늘 응원해 📣", "고마워, 늘 🌸"];
+const CHEER_PRESETS_BY_SLOT = { a: CHEER_PRESETS, b: ["ALL IS WELL"] };
 const TIER_NAMES = { 1: "베이직", 2: "레어", 3: "에픽", 4: "레전더리" };
 const CATS = [["head", "👒 머리"], ["face", "🙂 얼굴"], ["neck", "🧣 목"], ["prop", "🎈 소품"], ["aura", "✨ 오라"], ["frame", "🖼️ 프레임"], ["bg", "🌌 배경"]];
 const ITEMS = [
@@ -1391,7 +1392,7 @@ export default function Page() {
             )}
             {!mine && showCheerBox && (
               <div className="td-cheerbox">
-                <div className="td-cheerpresets">{CHEER_PRESETS.map((p, i) => <button key={i} onClick={() => sendCheerMsg(page, p)}>{p}</button>)}</div>
+                <div className="td-cheerpresets">{(CHEER_PRESETS_BY_SLOT[me] || CHEER_PRESETS).map((p, i) => <button key={i} onClick={() => sendCheerMsg(page, p)}>{p}</button>)}</div>
                 <div className="td-cheercustom">
                   <input className="td-input" placeholder="직접 한마디 적기…" value={cheerText} onChange={(ev) => setCheerText(ev.target.value)} />
                   <button className="td-qbtn" onClick={() => sendCheerMsg(page, cheerText)}>보내기</button>
