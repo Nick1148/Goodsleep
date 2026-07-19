@@ -174,14 +174,6 @@ function quoteFor(slot, localDate, dowMon, days, goals) {
     if (isLastDayOfMonth && lHM >= 20 * 60 && lHM <= 22 * 60 && row.last_monthly !== localDate) {
       if (await send(row, MONTHLY_MSG)) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "monthly", p_date: localDate }); sent++; }
     }
-
-    // 아침 한마디: 07:00~09:00 로컬, 하루 1회, 그날 상황(운동일/전날 수면/요일)에 맞춘 문구
-    if (lHM >= 7 * 60 && lHM <= 9 * 60 && row.last_morning !== localDate) {
-      const dowMon = (lDow + 6) % 7;
-      const { days: cDays, goals: cGoals } = await getCoupleData(row.couple_code);
-      const q = quoteFor(row.slot, localDate, dowMon, cDays, cGoals);
-      if (await send(row, { title: "우리의 하루", body: q, tag: "morning" })) { await rpc("gs_mark_notified", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot, p_type: "morning", p_date: localDate }); sent++; }
-    }
   }
   console.log(`done. sent=${sent}, subscribers=${rows.length}`);
   await sendRedemptionPushes();
