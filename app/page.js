@@ -931,11 +931,24 @@ export default function Page() {
   };
   // 개인 목표: { label, emoji, unit, weeklyLimit, countLimit(0=제한없음) }
   const pgoalOf = (slot) => (goals[slot] && goals[slot].pgoal) || null;
-  const pgStatus = (pg, m) => {
+  // 보너스 규칙: 조건 달성 시 주간 한도 증가. [{id,label,emoji,type:'daily_check'|'sleep_hours',hours?,minDays,reward}]
+  const bonusRulesOf = (slot) => (goals[slot] && goals[slot].bonusRules) || [];
+  const bonusEval = (slot, weekArr) => {
+    return bonusRulesOf(slot).map((r) => {
+      let d = 0;
+      weekArr.forEach((dk) => { if (dk > today()) return; const e = days[dk]?.[slot]; if (!e) return;
+        if (r.type === "daily_check") { if (e.bonus && e.bonus[r.id]) d++; }
+        else if (r.type === "sleep_hours") { const mm = sleepMinutes(e.bed, e.wake); if (mm != null && mm >= (r.hours || 7) * 60) d++; }
+      });
+      return { ...r, days: d, met: d >= r.minDays };
+    });
+  };
+  const pgStatus = (pg, m, effLimit) => {
     if (!pg) return null;
-    const overAmt = m.pgSum > pg.weeklyLimit;
+    const lim = effLimit || pg.weeklyLimit;
+    const overAmt = m.pgSum > lim;
     const overCnt = pg.countLimit > 0 && m.pgDays > pg.countLimit;
-    const nearAmt = !overAmt && m.pgSum > pg.weeklyLimit * 0.8;
+    const nearAmt = !overAmt && m.pgSum > lim * 0.8;
     if (overAmt || overCnt) return { txt: "한도 초과", c: "#DC6B57" };
     if (nearAmt) return { txt: "한도 임박", c: "#E0A23B" };
     return { txt: "순항 중", c: "#3DAE7B" };
@@ -1322,10 +1335,11 @@ export default function Page() {
 
           <div className="td-statstrip td-card">
             <div className="td-stat">
-              {(() => { const pg = pgoalOf(page); if (!pg) return (<><span>🎯 개인 목표</span><b style={{ color: "var(--muted)", fontSize: 11 }}>설정에서 만들어보세요</b></>); const st = pgStatus(pg, cur); const pct = Math.min(100, Math.round((cur.pgSum / pg.weeklyLimit) * 100)); return (<>
+              {(() => { const pg = pgoalOf(page); if (!pg) return (<><span>🎯 개인 목표</span><b style={{ color: "var(--muted)", fontSize: 11 }}>설정에서 만들어보세요</b></>); const bons = bonusEval(page, weekDates(today())); const extra = bons.filter((b) => b.met).reduce((a, b) => a + b.reward, 0); const effLim = pg.weeklyLimit + extra; const st = pgStatus(pg, cur, effLim); const pct = Math.min(100, Math.round((cur.pgSum / effLim) * 100)); return (<>
                 <span>{pg.emoji} {pg.label}</span>
                 <div className="td-progbar"><div className="td-progfill" style={{ width: pct + "%", background: st.c }} /></div>
-                <b style={{ color: st.c }}>{fmtPg(pg, cur.pgSum)}/{fmtPg(pg, pg.weeklyLimit)}{pg.countLimit > 0 ? ` · ${cur.pgDays}/${pg.countLimit}회` : ""}</b>
+                <b style={{ color: st.c }}>{fmtPg(pg, cur.pgSum)}/{fmtPg(pg, effLim)}{extra > 0 ? ` (+${extra})` : ""}{pg.countLimit > 0 ? ` · ${cur.pgDays}/${pg.countLimit}회` : ""}</b>
+                {bons.map((b) => <b key={b.id} style={{ color: b.met ? "#3DAE7B" : "var(--muted)", fontSize: 10 }}>{b.met ? `🎉 ${b.emoji} ${b.label} ${b.days}일 성공! +${b.reward}${pg.unit}` : `${b.emoji} ${b.label} ${b.days}/${b.minDays}일`}</b>)}
               </>); })()}
             </div>
             <div className="td-stat">
@@ -1342,8 +1356,11 @@ export default function Page() {
 
           <div className="td-card td-maincard">
             {[
-              ...(pgoalOf(page) ? [(() => { const pg = pgoalOf(page); return { k: "pg", label: `${pg.emoji} ${pg.label}`, filled: Number(e.pg) > 0, sum: Number(e.pg) > 0 ? fmtPg(pg, Number(e.pg)) : "오늘 0 (좋아요!)",
-                body: (<div className="td-mealrow"><span>오늘 {pg.label}</span><input className="td-input td-mealinput" type="number" min="0" inputMode="numeric" placeholder={`0 (${pg.unit})`} value={e.pg || ""} disabled={!mine} onChange={(ev) => updateEntry(page, { pg: ev.target.value === "" ? 0 : Math.max(0, parseInt(ev.target.value) || 0) })} /></div>) }; })()] : []),
+              ...(pgoalOf(page) ? [(() => { const pg = pgoalOf(page); const checks = bonusRulesOf(page).filter((r) => r.type === "daily_check"); return { k: "pg", label: `${pg.emoji} ${pg.label}`, filled: Number(e.pg) > 0 || checks.some((r) => e.bonus && e.bonus[r.id]), sum: Number(e.pg) > 0 ? fmtPg(pg, Number(e.pg)) : "오늘 0 (좋아요!)",
+                body: (<div>
+                  <div className="td-mealrow"><span>오늘 {pg.label}</span><input className="td-input td-mealinput" type="number" min="0" inputMode="numeric" placeholder={`0 (${pg.unit})`} value={e.pg || ""} disabled={!mine} onChange={(ev) => updateEntry(page, { pg: ev.target.value === "" ? 0 : Math.max(0, parseInt(ev.target.value) || 0) })} /></div>
+                  {checks.map((r) => { const on = !!(e.bonus && e.bonus[r.id]); return <button key={r.id} className={"td-bonuschk" + (on ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { bonus: { ...(e.bonus || {}), [r.id]: !on } })}>{on ? "✅" : "⬜"} {r.emoji} 오늘 {r.label} 성공!</button>; })}
+                </div>) }; })()] : []),
               { k: "ex", label: "💪 운동", filled: !!e.exercise, sum: e.exercise ? ("완료" + (e.exNote ? " · " + e.exNote : "")) : "미기록",
                 body: (<>
                   <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={onExercise} disabled={!mine}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
@@ -1467,7 +1484,9 @@ export default function Page() {
                 const arr = weekDates(ref);
                 const m = metricsFor(page, arr);
                 const sleepDays = arr.filter((dk) => { if (dk > today()) return false; const en = days[dk]?.[page]; const mm = en ? sleepMinutes(en.bed, en.wake) : null; return mm != null && mm >= (g.sleepHours - 0.5) * 60; }).length;
-                const st = pg ? pgStatus(pg, m) : null;
+                const bons = pg ? bonusEval(page, arr) : [];
+                const extra = bons.filter((b) => b.met).reduce((a, b) => a + b.reward, 0);
+                const st = pg ? pgStatus(pg, m, pg.weeklyLimit + extra) : null;
                 const label = wAgo === 0 ? "이번 주" : wAgo === 1 ? "지난주" : `${wAgo}주 전`;
                 return { label, sleepDays, m, st };
               });
@@ -1871,6 +1890,8 @@ const css = `
 .td-weekrow{ display:flex; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid var(--line); font-size:12.5px; color:var(--ink); flex-wrap:wrap; }
 .td-weekrow:last-child{ border-bottom:none; }
 .td-weeklb{ font-family:'Jua'; font-size:13px; flex:0 0 56px; }
+.td-bonuschk{ display:block; width:100%; text-align:left; margin-top:8px; padding:10px 12px; border:1.5px solid var(--line); border-radius:var(--r-sm); background:var(--field); color:var(--ink); font-family:'Gowun Dodum'; font-size:13px; cursor:pointer; }
+.td-bonuschk.on{ border-color:#3DAE7B; background:var(--good); }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
 .td-nightbtn{ width:36px; height:36px; border:none; border-radius:50%; background:var(--card); box-shadow:var(--sh-soft); font-size:15px; cursor:pointer; flex-shrink:0; }
