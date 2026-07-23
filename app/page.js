@@ -939,6 +939,7 @@ export default function Page() {
       weekArr.forEach((dk) => { if (dk > today()) return; const e = days[dk]?.[slot]; if (!e) return;
         if (r.type === "daily_check") { if (e.bonus && e.bonus[r.id]) d++; }
         else if (r.type === "sleep_hours") { const mm = sleepMinutes(e.bed, e.wake); if (mm != null && mm >= (r.hours || 7) * 60) d++; }
+        else if (r.type === "exercise") { if (e.exercise) d++; }
       });
       return { ...r, days: d, met: d >= r.minDays };
     });
