@@ -674,10 +674,11 @@ export default function Page() {
   // 마일리지 자동 적립 체크 (내 기록 기준, 중복 적립은 DB에서 방지)
   useEffect(() => {
     if (!code || loading || !me) return;
-    const en = days[today()]?.[me];
+    // 보고 있는 날짜(date) 기준으로 지급 — 과거 날짜를 소급 기록해도 그 날짜로 포인트 지급됨
+    const en = days[date]?.[me];
     const kissAward = (delta, reason, rd) => supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
-    if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", today()); kissAward(POINTS.full, "daily", today()); supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "daily", p_ref_date: today() }).then(() => {}); }
-    else if (hasEntry(en)) { award(me, POINTS.partial, "daily", today()); kissAward(POINTS.partial, "daily", today()); }
+    if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", date); kissAward(POINTS.full, "daily", date); if (date === today()) supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "daily", p_ref_date: date }).then(() => {}); }
+    else if (hasEntry(en)) { award(me, POINTS.partial, "daily", date); kissAward(POINTS.partial, "daily", date); }
 
     if (new Date().getDay() === 0) {
       const wk = weekDates(today());
@@ -701,7 +702,7 @@ export default function Page() {
     if (streak >= 30) award(me, POINTS.m30, "milestone_30", SENTINEL);
     if (streak >= 100) award(me, POINTS.m100, "milestone_100", SENTINEL);
     if (streak >= 365) award(me, POINTS.m365, "milestone_365", SENTINEL);
-  }, [code, loading, days, me]);
+  }, [code, loading, days, me, date]);
 
   // 날짜/사람 변경 시: 이미 채워진 항목은 접힌 상태로 시작
   useEffect(() => {
