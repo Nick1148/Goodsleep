@@ -22,7 +22,7 @@ const sleepMood = (m) => {
   return { emoji: "💤", msg: "든든하게 충전 완료!", sleepy: false };
 };
 const greeting = () => { const h = new Date().getHours(); if (h < 6) return "늦은 밤이야"; if (h < 12) return "좋은 아침이야"; if (h < 18) return "좋은 오후야"; if (h < 22) return "좋은 저녁이야"; return "좋은 밤이야"; };
-const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, mood: 0, gratitude: ["", "", ""], reflection: "", pg: 0 });
+const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, mood: 0, gratitude: ["", "", ""], reflection: "", pg: null });
 const blankEntry = () => ({ ...FIELDS(), cheers: 0 });
 const dataForDb = (e) => { const { cheers, ...rest } = e; return rest; };
 const entryFromRow = (row) => { const d = row.data || {}; return { ...FIELDS(), ...d, meals: { breakfast: "", lunch: "", dinner: "", ...(d.meals || {}) }, cheers: row.cheers ?? 0 }; };
@@ -1357,9 +1357,10 @@ export default function Page() {
 
           <div className="td-card td-maincard">
             {[
-              ...(pgoalOf(page) ? [(() => { const pg = pgoalOf(page); const checks = bonusRulesOf(page).filter((r) => r.type === "daily_check"); return { k: "pg", label: `${pg.emoji} ${pg.label}`, filled: Number(e.pg) > 0 || checks.some((r) => e.bonus && e.bonus[r.id]), sum: Number(e.pg) > 0 ? fmtPg(pg, Number(e.pg)) : "오늘 0 (좋아요!)",
+              ...(pgoalOf(page) ? [(() => { const pg = pgoalOf(page); const checks = bonusRulesOf(page).filter((r) => r.type === "daily_check"); return { k: "pg", label: `${pg.emoji} ${pg.label}`, filled: e.pg != null || checks.some((r) => e.bonus && e.bonus[r.id]), sum: e.pg == null ? "미기록" : (Number(e.pg) === 0 ? "0! 완벽해요 👏" : fmtPg(pg, Number(e.pg))),
                 body: (<div>
-                  <div className="td-mealrow"><span>오늘 {pg.label}</span><input className="td-input td-mealinput" type="number" min="0" inputMode="numeric" placeholder={`0 (${pg.unit})`} value={e.pg || ""} disabled={!mine} onChange={(ev) => updateEntry(page, { pg: ev.target.value === "" ? 0 : Math.max(0, parseInt(ev.target.value) || 0) })} /></div>
+                  <div className="td-mealrow"><span>오늘 {pg.label}</span><input className="td-input td-mealinput" type="number" min="0" inputMode="numeric" placeholder={`숫자 입력 (${pg.unit})`} value={e.pg == null ? "" : e.pg} disabled={!mine} onChange={(ev) => updateEntry(page, { pg: ev.target.value === "" ? null : Math.max(0, parseInt(ev.target.value) || 0) })} /></div>
+                  {e.pg === 0 && <div className="td-zeropraise">🎉 오늘 {pg.label} 0! 참은 거 너무 잘했어 👏</div>}
                   {checks.map((r) => { const on = !!(e.bonus && e.bonus[r.id]); return <button key={r.id} className={"td-bonuschk" + (on ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { bonus: { ...(e.bonus || {}), [r.id]: !on } })}>{on ? "✅" : "⬜"} {r.emoji} 오늘 {r.label} 성공!</button>; })}
                 </div>) }; })()] : []),
               { k: "ex", label: "💪 운동", filled: !!e.exercise, sum: e.exercise ? ("완료" + (e.exNote ? " · " + e.exNote : "")) : "미기록",
@@ -1564,7 +1565,7 @@ export default function Page() {
               {monthCells.map((dk, i) => {
                 if (!dk) return <span key={"e" + i} className="td-mcell empty" />;
                 const en = days[dk]?.[page]; const mm = en ? sleepMinutes(en.bed, en.wake) : null;
-                const slept = mm != null; const goalMet = mm != null && mm >= (g.sleepHours - 0.5) * 60; const pgRec = Number(en?.pg) > 0;
+                const slept = mm != null; const goalMet = mm != null && mm >= (g.sleepHours - 0.5) * 60; const pgRec = en?.pg != null && en?.pg !== "";
                 const dnum = parseInt(dk.split("-")[2], 10);
                 return (<button key={dk} className={"td-mcell" + (dk === date ? " sel" : "")} onClick={() => { setDate(dk); setView("today"); }} style={{ background: goalMet ? "var(--soft)" : (slept ? "var(--soft2)" : "transparent") }}>
                   <span className="td-mnum">{dnum}</span>{pgRec && <span className="td-mdot" style={{ background: t.c1 }} />}
@@ -1893,6 +1894,7 @@ const css = `
 .td-weeklb{ font-family:'Jua'; font-size:13px; flex:0 0 56px; }
 .td-bonuschk{ display:block; width:100%; text-align:left; margin-top:8px; padding:10px 12px; border:1.5px solid var(--line); border-radius:var(--r-sm); background:var(--field); color:var(--ink); font-family:'Gowun Dodum'; font-size:13px; cursor:pointer; }
 .td-bonuschk.on{ border-color:#3DAE7B; background:var(--good); }
+.td-zeropraise{ margin-top:8px; padding:9px 12px; border-radius:var(--r-sm); background:var(--good); color:#3DAE7B; font-size:12.5px; font-family:'Gowun Dodum'; }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
 .td-nightbtn{ width:36px; height:36px; border:none; border-radius:50%; background:var(--card); box-shadow:var(--sh-soft); font-size:15px; cursor:pointer; flex-shrink:0; }
