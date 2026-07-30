@@ -1691,9 +1691,9 @@ export default function Page() {
 
           <div className="td-card td-shopcard">
             <h3 className="td-rewardh3">🧾 나의 적립 내역</h3>
-            {ledger.filter((r) => r.slot === me && isMile(r)).slice(0, 8).map((r) => (
+            {ledger.filter((r) => r.slot === me && isMile(r)).slice().sort((x, y) => (y.ref_date || "").localeCompare(x.ref_date || "")).slice(0, 8).map((r) => (
               <div key={r.id} className="td-ledgerrow">
-                <span className="td-ledgerdate">{(r.ref_date || "").slice(5).replace("-", "/")}</span>
+                <span className="td-ledgerdate">{r.reason.startsWith("milestone_") ? "누적" : (r.ref_date || "").slice(5).replace("-", "/")}</span>
                 <span className="td-ledgerlabel">{r.reason.startsWith("redeem_") ? "🎁 리워드 교환" : r.reason.startsWith("gift_to_") ? "💝 포인트 선물 보냄" : r.reason.startsWith("gift_from_") ? "💝 포인트 선물 받음" : r.reason.startsWith("giftitem_") ? "💝 아이템 선물" : r.reason.startsWith("item_") ? "🛍️ 아이템 구매" : (LEDGER_LABEL[r.reason] || r.reason)}</span>
                 <b className={r.delta > 0 ? "plus" : "minus"}>{r.delta > 0 ? "+" : ""}{r.delta}p</b>
               </div>
