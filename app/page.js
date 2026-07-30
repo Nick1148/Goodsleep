@@ -752,6 +752,24 @@ export default function Page() {
 
   const getEntry = (slot) => (days[date] && days[date][slot]) || blankEntry();
   const [saveFailed, setSaveFailed] = useState(false);
+
+  // ---- 🎂 생일 서프라이즈 (지인 8/1) ----
+  const BDAY = { slot: "b", date: "2026-08-01", name: "지인" };
+  const isBday = me === BDAY.slot && today() === BDAY.date;
+  const [bdayOpen, setBdayOpen] = useState(false);
+  const [bdayGiftDone, setBdayGiftDone] = useState(false);
+  useEffect(() => {
+    if (!isBday || !code) return;
+    try { if (localStorage.getItem("gs_bday_" + BDAY.date) === "1") return; } catch (e) {}
+    setBdayOpen(true);
+  }, [isBday, code]);
+  const claimBdayGift = () => {
+    supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: 100, p_reason: "birthday", p_ref_date: BDAY.date }).then(() => {
+      supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+      setBdayGiftDone(true); fireCelebrate("생일 선물 도착! 💋+100");
+    });
+  };
+  const closeBday = () => { setBdayOpen(false); try { localStorage.setItem("gs_bday_" + BDAY.date, "1"); } catch (e) {} };
   const pushData = (slot, entry) => {
     const k = `${date}:${slot}`;
     if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
@@ -1233,6 +1251,27 @@ export default function Page() {
       <div className="td-glow" />
       <div className="td-app">
 
+        {bdayOpen && (
+          <div className="td-bdayveil">
+            <div className="td-bdaycard">
+              <div className="td-bdaycake">🎂</div>
+              <div className="td-bdayconfetti">🎉 🎈 ✨ 🎊</div>
+              <h2>지인아, 생일 축하해</h2>
+              <p className="td-bdaymsg">
+                나는 표현이 서툴러서<br/>말로는 반의 반도 못 전하지만,<br/>
+                내 마음이 작아서 그런 건 절대 아니야.<br/>
+                네가 생각하는 것보다 훨씬 크고 깊어.<br/><br/>
+                올해 소원은 딱 하나 —<br/>허리도 마음도 아프지 않기.<br/>
+                푹 자고, 건강하게. 옆에서 내가 챙길게.<br/><br/>
+                태어나줘서 고마워. 사랑해 💛
+              </p>
+              {!bdayGiftDone
+                ? <button className="td-loginbtn" onClick={claimBdayGift}>🎁 생일 선물 받기</button>
+                : <div className="td-bdaydone">💋 +100 도착! 스타일샵에서 마음껏 써 🎀</div>}
+              <small className="td-loginhint" onClick={closeBday} style={{ cursor: "pointer", textDecoration: "underline" }}>이따가 볼게</small>
+            </div>
+          </div>
+        )}
         {saveFailed && <div className="td-savefail" onClick={() => { setSaveFailed(false); const en = (days[date] || {})[me]; if (en) pushData(me, en); }}>⚠️ 저장이 안 됐어요 — 여기를 눌러 다시 시도</div>}
         <div className="td-topbar">
           <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}<small>{new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })} · 오늘</small></span>
@@ -1895,6 +1934,15 @@ const css = `
 .td-weeklb{ font-family:'Jua'; font-size:13px; flex:0 0 56px; }
 .td-bonuschk{ display:block; width:100%; text-align:left; margin-top:8px; padding:10px 12px; border:1.5px solid var(--line); border-radius:var(--r-sm); background:var(--field); color:var(--ink); font-family:'Gowun Dodum'; font-size:13px; cursor:pointer; }
 .td-bonuschk.on{ border-color:#3DAE7B; background:var(--good); }
+.td-bdayveil{ position:fixed; inset:0; z-index:60; background:rgba(60,35,45,.45); backdrop-filter:blur(6px); display:flex; align-items:center; justify-content:center; padding:24px; animation:tdfade .5s ease; }
+.td-bdaycard{ background:var(--card); border-radius:26px; padding:30px 24px; max-width:340px; width:100%; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+.td-bdaycake{ font-size:56px; animation:tdbounce 1.6s ease-in-out infinite; }
+.td-bdayconfetti{ font-size:18px; letter-spacing:6px; margin:6px 0 10px; }
+.td-bdaycard h2{ font-family:'Jua'; font-size:22px; margin:4px 0 14px; color:var(--ink); }
+.td-bdaymsg{ font-size:14px; line-height:1.75; color:var(--ink); margin:0 0 18px; }
+.td-bdaydone{ font-family:'Jua'; font-size:15px; color:var(--c1); padding:12px; background:var(--soft); border-radius:var(--r-sm); }
+@keyframes tdbounce{ 0%,100%{transform:translateY(0) rotate(-2deg);} 50%{transform:translateY(-8px) rotate(2deg);} }
+@keyframes tdfade{ from{opacity:0;} to{opacity:1;} }
 .td-zeropraise{ margin-top:8px; padding:9px 12px; border-radius:var(--r-sm); background:var(--good); color:#3DAE7B; font-size:12.5px; font-family:'Gowun Dodum'; }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
