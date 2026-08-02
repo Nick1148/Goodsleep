@@ -65,6 +65,20 @@ const COUPLE_Q = [
   "상대와 여행 간다면 어디로?", "상대의 어떤 노력을 알아주고 싶어?", "지금 상대가 옆에 있다면 하고 싶은 말은?", "우리만 아는 웃긴 순간은?", "상대에게서 가장 안정감을 느낄 때는?",
   "함께 만들어가고 싶은 우리의 규칙은?", "상대의 어떤 취향을 응원해?", "오늘 상대 덕분에 나아진 기분이 있다면?", "서로에게 첫인상은 어땠을까?", "상대와 오래 하고 싶은 약속 하나는?",
 ];
+const COUPLE_Q_EXTRA = [
+  "서로에게 처음 반한 순간은 언제였어?", "상대와 함께라서 달라진 나의 모습은?", "우리 커플의 최대 강점은 뭐라고 생각해?", "상대가 자는 모습을 보면 무슨 생각이 들어?", "10년 뒤 우리는 어떤 모습일까?",
+  "상대에게 아직 말 못 한 사소한 비밀은?", "우리 둘이 같이 살면 제일 재밌을 것 같은 건?", "상대의 손을 잡을 때 기분을 한 단어로?", "서로 바꿔서 하루를 산다면 뭐부터 할래?", "상대가 요리해줬으면 하는 메뉴는?",
+  "우리만 아는 유행어나 별명 중 최애는?", "상대와 여행 간다면 국내? 해외? 어디?", "상대의 카톡 답장 스타일 평가하자면?", "둘 중 누가 더 어른스러워? 왜?", "상대에게 하루 종일 심부름 시킬 수 있다면 뭐 시킬래?",
+  "상대의 옷장에서 훔치고 싶은 옷은?", "우리 커플 주제곡을 정한다면?", "상대가 화났을 때 푸는 최고의 방법은?", "둘이 같이 키우고 싶은 동물은?", "상대의 어릴 적 사진을 보면 무슨 생각이 들어?",
+  "서로의 부모님께 제일 감사한 점은?", "상대와 함께 본 것 중 최고의 영화/드라마는?", "둘이 만약 복권 당첨되면 제일 먼저 할 일은?", "상대가 아플 때 해주고 싶은 것은?", "우리의 다음 기념일에 하고 싶은 것은?",
+  "상대의 웃음소리를 묘사한다면?", "둘 중 누가 더 길치야? 에피소드 있어?", "상대에게 요즘 제일 궁금한 것은?", "함께 늙어가면서 꼭 하고 싶은 것 하나는?", "상대가 세상에서 제일 잘하는 것 같은 건?",
+  "오늘 하루 상대 덕분에 참을 수 있었던 것은?", "상대와의 첫 여행에서 기억나는 장면은?", "둘이 함께 만들고 싶은 새로운 습관은?", "상대의 목소리 중 제일 좋아하는 톤은?", "만약 내일 지구가 멸망한다면 상대와 뭐 할래?",
+  "상대에게 선물받고 싶은 것 (비쌀 필요 없음)?", "우리 커플을 영화 제목으로 표현하면?", "상대의 잠버릇 중 귀여운 것은?", "서로에게 점수를 준다면 오늘 몇 점? 이유는?", "지금 상대에게 가장 하고 싶은 말 한마디는?",
+];
+const qForDate = (d) => {
+  const ALL = [...COUPLE_Q, ...COUPLE_Q_EXTRA];
+  return d >= "2026-08-03" ? ALL[dayOfYear(d) % ALL.length] : COUPLE_Q[dayOfYear(d) % COUPLE_Q.length];
+};
 const CHEER_PRESETS = ["오늘도 고생했어 🤍", "잘 자, 내 꿈 꿔 🌙", "네가 최고야 ✨", "보고 싶다 🥰", "오늘 하루도 예뻤어", "푹 쉬어, 사랑해 💗", "늘 응원해 📣", "고마워, 늘 🌸"];
 const CHEER_PRESETS_BY_SLOT = { a: CHEER_PRESETS, b: ["ALL IS WELL"] };
 const TIER_NAMES = { 1: "베이직", 2: "레어", 3: "에픽", 4: "레전더리" };
@@ -1174,9 +1188,9 @@ export default function Page() {
   const kissA = ledger.filter((r) => r.slot === "a" && isKiss(r)).reduce((s, r) => s + r.delta, 0);
   const kissB = ledger.filter((r) => r.slot === "b" && isKiss(r)).reduce((s, r) => s + r.delta, 0);
   const myKiss = me === "a" ? kissA : kissB;
-  const todayQ = COUPLE_Q[dayOfYear(today()) % COUPLE_Q.length];
-  const myAns = answers.find((a) => a.qdate === today() && a.slot === me);
-  const partnerAns = answers.find((a) => a.qdate === today() && a.slot !== me);
+  const todayQ = qForDate(date);
+  const myAns = answers.find((a) => a.qdate === date && a.slot === me);
+  const partnerAns = answers.find((a) => a.qdate === date && a.slot !== me);
   const inboxLetters = messages.filter((m) => m.kind === "letter" && m.to_slot === me && !m.opened);
   const recentCheers = messages.filter((m) => m.kind === "cheer" && m.to_slot === me).slice(0, 3);
   const ownedSets = { a: new Set(inventory.filter(iv => iv.slot === "a").map(iv => iv.item_id)), b: new Set(inventory.filter(iv => iv.slot === "b").map(iv => iv.item_id)) };
@@ -1305,13 +1319,15 @@ export default function Page() {
           )}
           {mine && (
             <div className="td-qcard td-card">
-              <div className="td-qhead">💕 오늘의 질문</div>
+              <div className="td-qhead">💕 {isToday ? "오늘의 질문" : `${parseInt(date.slice(5,7))}월 ${parseInt(date.slice(8,10))}일의 질문`}</div>
               <p className="td-qtext">{todayQ}</p>
               {!myAns ? (
+                isToday ? (
                 <div className="td-qanswer">
                   <input className="td-input" placeholder="답을 적으면 상대 답이 열려요" value={qInput} onChange={(ev) => setQInput(ev.target.value)} />
                   <button className="td-qbtn" onClick={saveAnswer}>답하기</button>
                 </div>
+                ) : <div className="td-qwait">이날은 답하지 않았어요</div>
               ) : (
                 <div className="td-qdone">
                   <div className="td-qbubble me"><b>나</b><span>{myAns.answer}</span></div>
