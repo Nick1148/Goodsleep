@@ -2076,7 +2076,7 @@ const css = `
 .td-datenav{ display:flex; align-items:center; justify-content:center; gap:12px; margin-bottom:12px; }
 .td-datenav button{ width:34px; height:34px; flex:0 0 auto; border-radius:50%; border:none; background:var(--card); font-size:19px; cursor:pointer; color:var(--ink); box-shadow:0 3px 8px var(--shadow); }
 .td-datenav button:disabled{ opacity:.35; }
-.td-date{ text-align:center; } .td-date b{ font-family:'Jua'; font-size:20px; display:block; line-height:1.15; } .td-date small{ font-size:12px; color:var(--muted); }
+.td-date{ text-align:center; } .td-date b{ font-family:'Jua'; font-size:20px; display:block; line-height:1.15; } .td-date small{ font-size:12px; color:var(--muted); display:block; }
 
 .td-hero{ padding:var(--sp4); margin-bottom:var(--sp3); position:relative; }
 .td-buddywrap{ display:flex; flex-direction:column; align-items:center; gap:4px; margin-bottom:12px; }
@@ -2196,7 +2196,7 @@ const css = `
 .td-monthreport{ padding:var(--sp4); margin-top:var(--sp3); }
 .td-monthreport h3{ font-family:'Jua'; font-size:15px; margin:0 0 12px; color:var(--ink); }
 .td-viewonly{ text-align:center; font-family:'Jua'; font-size:12px; color:var(--muted); background:var(--glass); border:1px dashed var(--line); border-radius:12px; padding:8px; margin-bottom:10px; }
-.td-gototoday{ display:inline-block; margin:5px auto 0; border:none; background:var(--soft); color:var(--c2); font-family:'Jua'; font-size:11px; padding:4px 14px; border-radius:999px; cursor:pointer; white-space:nowrap; }
+.td-gototoday{ display:block; width:fit-content; margin:6px auto 0; border:none; background:var(--soft); color:var(--c2); font-family:'Jua'; font-size:11px; padding:4px 14px; border-radius:999px; cursor:pointer; white-space:nowrap; }
 .td-yesterday{ width:100%; margin-top:9px; padding:9px; border:1px dashed var(--soft); border-radius:11px; background:transparent; color:var(--muted); font-family:'Jua'; font-size:13px; cursor:pointer; }
 .td-bhead{ width:100%; display:flex; align-items:center; gap:8px; background:none; border:none; padding:0; cursor:pointer; text-align:left; }
 .td-blabel2{ font-family:'Jua'; font-size:15px; color:var(--ink); }
