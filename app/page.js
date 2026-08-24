@@ -1373,8 +1373,7 @@ export default function Page() {
               <div className="td-bdayconfetti">🌹 💛 🌷 ✨</div>
               <h2>우리 200일이야, 지인아</h2>
               <p className="td-bdaymsg">
-                꽃다발은 이걸로 먼저 받아줘 💐<br/>
-                진짜 꽃은 만나서 줄게.<br/><br/>
+                200일 기념 꽃다발이야 💐<br/><br/>
                 200일 동안 함께해줘서 고마워.<br/>
                 앞으로도 매일 잘 기록하고,<br/>잘 자고, 건강하게 — 같이 가자.
               </p>
