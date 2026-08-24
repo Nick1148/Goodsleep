@@ -870,7 +870,7 @@ export default function Page() {
 
   // ---- 💐 200일 기념 (지인 8/25) ----
   const ANNIV = { slot: "b", date: "2026-08-25" };
-  const isAnniv = me === ANNIV.slot && today() === ANNIV.date;
+  const isAnniv = today() === ANNIV.date; // 확인용: 둘 다 표시 (선물 버튼은 지인만)
   const [annivOpen, setAnnivOpen] = useState(false);
   const [annivDone, setAnnivDone] = useState(false);
   useEffect(() => {
@@ -1377,9 +1377,10 @@ export default function Page() {
                 200일 동안 함께해줘서 고마워.<br/>
                 앞으로도 매일 잘 기록하고,<br/>잘 자고, 건강하게 — 같이 가자.
               </p>
-              {!annivDone
+              {me === ANNIV.slot ? (!annivDone
                 ? <button className="td-loginbtn" onClick={claimAnniv}>💝 200일 선물 받기 (+200p)</button>
-                : <div className="td-bdaydone">🪙 +200p 도착! 리워드에서 쓰고 싶은 거 골라 🎁</div>}
+                : <div className="td-bdaydone">🪙 +200p 도착! 리워드에서 쓰고 싶은 거 골라 🎁</div>)
+                : <div className="td-bdaydone">💝 지인에게는 선물 버튼이 보여요</div>}
               <small className="td-loginhint" onClick={closeAnniv} style={{ cursor: "pointer", textDecoration: "underline" }}>이따가 볼게</small>
             </div>
           </div>
