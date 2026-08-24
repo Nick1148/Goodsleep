@@ -867,6 +867,24 @@ export default function Page() {
     });
   };
   const closeBday = () => { setBdayOpen(false); try { localStorage.setItem("gs_bday_" + BDAY.date, "1"); } catch (e) {} };
+
+  // ---- 💐 200일 기념 (지인 8/25) ----
+  const ANNIV = { slot: "b", date: "2026-08-25" };
+  const isAnniv = me === ANNIV.slot && today() === ANNIV.date;
+  const [annivOpen, setAnnivOpen] = useState(false);
+  const [annivDone, setAnnivDone] = useState(false);
+  useEffect(() => {
+    if (!isAnniv || !code) return;
+    try { if (localStorage.getItem("gs_anniv200") === "1") return; } catch (e) {}
+    setAnnivOpen(true);
+  }, [isAnniv, code]);
+  const claimAnniv = () => {
+    supabase.rpc("gs2_mileage_award", { p_code: code, p_slot: me, p_delta: 200, p_reason: "anniversary", p_ref_date: ANNIV.date }).then(() => {
+      supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+      setAnnivDone(true); fireCelebrate("200일 축하해! 🪙+200");
+    });
+  };
+  const closeAnniv = () => { setAnnivOpen(false); try { localStorage.setItem("gs_anniv200", "1"); } catch (e) {} };
   const pushData = (slot, entry) => {
     const k = `${date}:${slot}`;
     if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
@@ -1348,6 +1366,25 @@ export default function Page() {
       <div className="td-glow" />
       <div className="td-app">
 
+        {annivOpen && (
+          <div className="td-bdayveil">
+            <div className="td-bdaycard">
+              <div className="td-bdaycake">💐</div>
+              <div className="td-bdayconfetti">🌹 💛 🌷 ✨</div>
+              <h2>우리 200일이야, 지인아</h2>
+              <p className="td-bdaymsg">
+                꽃다발은 이걸로 먼저 받아줘 💐<br/>
+                진짜 꽃은 만나서 줄게.<br/><br/>
+                200일 동안 함께해줘서 고마워.<br/>
+                앞으로도 매일 잘 기록하고,<br/>잘 자고, 건강하게 — 같이 가자.
+              </p>
+              {!annivDone
+                ? <button className="td-loginbtn" onClick={claimAnniv}>💝 200일 선물 받기 (+200p)</button>
+                : <div className="td-bdaydone">🪙 +200p 도착! 리워드에서 쓰고 싶은 거 골라 🎁</div>}
+              <small className="td-loginhint" onClick={closeAnniv} style={{ cursor: "pointer", textDecoration: "underline" }}>이따가 볼게</small>
+            </div>
+          </div>
+        )}
         {bdayOpen && (
           <div className="td-bdayveil">
             <div className="td-bdaycard">
