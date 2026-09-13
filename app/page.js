@@ -864,6 +864,8 @@ export default function Page() {
   const [bigCeleb, setBigCeleb] = useState(null);
   const [messages, setMessages] = useState([]);
   const [answers, setAnswers] = useState([]);
+  const [guesses, setGuesses] = useState([]);
+  const [guessInput, setGuessInput] = useState("");
   const [qInput, setQInput] = useState("");
   const [cheerText, setCheerText] = useState("");
   const [showCheerBox, setShowCheerBox] = useState(false);
@@ -1284,9 +1286,11 @@ export default function Page() {
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs2_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
   const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs2_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs2_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
+  useEffect(() => { if (code) supabase.rpc("gs2_guess_get", { p_code: code }).then(({ data }) => { if (data) setGuesses(data); }); }, [code]);
   const reloadSocial = () => {
     supabase.rpc("gs2_msg_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setMessages(data); });
     supabase.rpc("gs2_qa_get", { p_code: code, p_me: me }).then(({ data }) => { if (data) setAnswers(data); });
+    supabase.rpc("gs2_guess_get", { p_code: code }).then(({ data }) => { if (data) setGuesses(data); });
   };
   const sendCheerMsg = (slot, text) => {
     setBurstKey((k) => k + 1);
@@ -1658,6 +1662,10 @@ export default function Page() {
   const kissB = ledger.filter((r) => r.slot === "b" && isKiss(r)).reduce((s, r) => s + r.delta, 0);
   const myKiss = me === "a" ? kissA : kissB;
   const todayQ = qForDate(date);
+  const myGuess = guesses.find((g) => g.qdate === date && g.slot === me);
+  const partnerGuess = guesses.find((g) => g.qdate === date && g.slot !== me);
+  const saveGuess = () => { if (!guessInput.trim()) return; supabase.rpc("gs2_guess_save", { p_code: code, p_slot: me, p_qdate: date, p_guess: guessInput.trim() }).then(() => { setGuessInput(""); reloadSocial(); }); };
+  const judgeGuess = (ok) => { supabase.rpc("gs2_guess_judge", { p_code: code, p_slot: me, p_qdate: date, p_correct: ok }).then(() => { reloadSocial(); if (ok) fireCelebrate(`${names[me === "a" ? "b" : "a"]} 정답! 💋+20`); }); };
   const myAns = answers.find((a) => a.qdate === date && a.slot === me);
   const partnerAns = answers.find((a) => a.qdate === date && a.slot !== me);
   const inboxLetters = messages.filter((m) => m.kind === "letter" && m.to_slot === me && !m.opened);
@@ -1810,17 +1818,34 @@ export default function Page() {
               <div className="td-qhead">💕 {isToday ? "오늘의 질문" : `${parseInt(date.slice(5,7))}월 ${parseInt(date.slice(8,10))}일의 질문`}</div>
               <p className="td-qtext">{todayQ}</p>
               {!myAns ? (
-                isToday ? (
-                <div className="td-qanswer">
-                  <input className="td-input" placeholder="답을 적으면 상대 답이 열려요" value={qInput} onChange={(ev) => setQInput(ev.target.value)} />
-                  <button className="td-qbtn" onClick={saveAnswer}>답하기</button>
-                </div>
-                ) : <div className="td-qwait">이날은 답하지 않았어요</div>
+                isToday ? (<>
+                  {!myGuess ? (
+                    <div className="td-guessbox">
+                      <div className="td-guesslb">🎯 먼저 맞혀봐 — {names[me === "a" ? "b" : "a"]}은(는) 뭐라고 답할까? <small>(맞히면 💋+20)</small></div>
+                      <div className="td-qanswer">
+                        <input className="td-input" placeholder="상대 답 예측 (건너뛰어도 돼)" value={guessInput} onChange={(ev) => setGuessInput(ev.target.value)} />
+                        <button className="td-qbtn" onClick={saveGuess}>예측</button>
+                      </div>
+                    </div>
+                  ) : <div className="td-guessdone">🎯 내 예측: "{myGuess.guess}"</div>}
+                  <div className="td-qanswer">
+                    <input className="td-input" placeholder="내 답을 적으면 상대 답이 열려요" value={qInput} onChange={(ev) => setQInput(ev.target.value)} />
+                    <button className="td-qbtn" onClick={saveAnswer}>답하기</button>
+                  </div>
+                </>) : <div className="td-qwait">이날은 답하지 않았어요</div>
               ) : (
                 <div className="td-qdone">
                   <div className="td-qbubble me"><b>나</b><span>{myAns.answer}</span></div>
                   {partnerAns ? <div className="td-qbubble partner"><b>{names[me === "a" ? "b" : "a"]}</b><span>{partnerAns.answer}</span></div>
                     : <div className="td-qwait">{names[me === "a" ? "b" : "a"]}의 답을 기다리는 중… 🕊️</div>}
+                  {myGuess && partnerAns && <div className="td-guessdone">🎯 내 예측: "{myGuess.guess}" {myGuess.judged ? (myGuess.correct ? "→ 정답! 💋+20" : "→ 땡 ㅋㅋ") : "→ 상대 판정 대기"}</div>}
+                  {partnerGuess && !partnerGuess.judged && (
+                    <div className="td-judgebox">
+                      <div className="td-guesslb">🎯 {names[me === "a" ? "b" : "a"]}이(가) 네 답을 이렇게 예측했어: <b>"{partnerGuess.guess}"</b></div>
+                      <div className="td-judgebtns"><button className="td-qbtn" onClick={() => judgeGuess(true)}>맞았어 🎯</button><button className="td-qbtn ghost" onClick={() => judgeGuess(false)}>땡 ❌</button></div>
+                    </div>
+                  )}
+                  {partnerGuess && partnerGuess.judged && <div className="td-guessdone">🎯 {names[me === "a" ? "b" : "a"]}의 예측: "{partnerGuess.guess}" {partnerGuess.correct ? "→ 정답 인정 💋" : "→ 땡"}</div>}
                 </div>
               )}
             </div>
@@ -2447,6 +2472,11 @@ const css = `
 .td-bdaydone{ font-family:'Jua'; font-size:15px; color:var(--c1); padding:12px; background:var(--soft); border-radius:var(--r-sm); }
 @keyframes tdbounce{ 0%,100%{transform:translateY(0) rotate(-2deg);} 50%{transform:translateY(-8px) rotate(2deg);} }
 @keyframes tdfade{ from{opacity:0;} to{opacity:1;} }
+.td-guessbox{ margin-bottom:10px; padding:10px 12px; border-radius:var(--r-sm); background:var(--soft2); border:1.5px dashed var(--c1); }
+.td-guesslb{ font-size:12.5px; color:var(--ink); margin-bottom:6px; line-height:1.4; } .td-guesslb small{ color:var(--muted); }
+.td-guessdone{ margin-top:8px; font-size:12.5px; color:var(--muted); }
+.td-judgebox{ margin-top:10px; padding:10px 12px; border-radius:var(--r-sm); background:var(--soft); }
+.td-judgebtns{ display:flex; gap:8px; margin-top:6px; } .td-judgebtns .td-qbtn{ flex:1; } .td-qbtn.ghost{ background:var(--card); color:var(--ink); border:1.5px solid var(--line); }
 .td-zeropraise{ margin-top:8px; padding:9px 12px; border-radius:var(--r-sm); background:var(--good); color:#3DAE7B; font-size:12.5px; font-family:'Gowun Dodum'; }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
