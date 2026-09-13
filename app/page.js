@@ -1683,6 +1683,24 @@ export default function Page() {
   const { md, dow } = labelDate(date); const isToday = date === today();
   const thisWeek = weekDates(today()); const lastWeek = weekDates(addDays(today(), -7));
   const cur = metricsFor(page, thisWeek); const prev = metricsFor(page, lastWeek);
+  // ---- 🥊 주간 배틀: 수면목표 달성일 + 개인목표 준수율로 점수 ----
+  const battleFor = (weekArr) => {
+    const score = (slot) => {
+      const gg = goals[slot] || {}; const sh = gg.sleepHours || 7;
+      const sleepDays = weekArr.filter((dk) => { if (dk > today()) return false; const en = days[dk]?.[slot]; const mm = en ? sleepMinutes(en.bed, en.wake) : null; return mm != null && mm >= (sh - 0.5) * 60; }).length;
+      const pg = pgoalOf(slot); const m = metricsFor(slot, weekArr);
+      let pgScore = null;
+      if (pg) { const extra = bonusEval(slot, weekArr).filter((b) => b.met).reduce((a, b) => a + b.reward, 0); const lim = pg.weeklyLimit + extra; const used = Math.min(1, m.pgSum / lim); const cntOk = !(pg.countLimit > 0 && m.pgDays > pg.countLimit); pgScore = cntOk ? Math.round((1 - used) * 7) : 0; }
+      return { sleepDays, pgScore, total: sleepDays + (pgScore ?? 0), logged: m.logged };
+    };
+    const a = score("a"), b = score("b");
+    const winner = a.total > b.total ? "a" : b.total > a.total ? "b" : "draw";
+    return { a, b, winner, week: weekArr[0] };
+  };
+  const battleNow = battleFor(thisWeek);
+  const battlePrev = battleFor(lastWeek);
+  const prevClaimed = ledger.some((r) => r.slot === me && (r.reason === "battle" || r.reason === "battle_draw") && r.ref_date === lastWeek[0]);
+  const claimBattle = () => { const res = battlePrev.winner === me ? "win" : battlePrev.winner === "draw" ? "draw" : "lose"; if (res === "lose") return; supabase.rpc("gs2_battle_claim", { p_code: code, p_slot: me, p_week: lastWeek[0], p_result: res }).then(() => { supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }); fireCelebrate(res === "win" ? "지난주 배틀 승리! 🪙+50" : "무승부! 🪙+20"); }); };
   const reg = regLabel(cur.spread); const fb = makeFeedback(cur, prev, g);
   const exPct = Math.min(100, Math.round((cur.exDays / Math.max(1, g.exerciseWeekly)) * 100));
   const sd = sleepDebtFor(page, g);
@@ -1805,6 +1823,10 @@ export default function Page() {
         )}
 
         {view === "today" && (<>
+          <button className="td-battlemini td-card" onClick={() => setView("review")}>
+            🥊 이번 주 배틀 <b>{names.a} {battleNow.a.total} : {battleNow.b.total} {names.b}</b>
+            <span>{battleNow.winner === "draw" ? "팽팽 🔥" : battleNow.winner === me ? "내가 리드 👑" : "밀리는 중 😤"}</span>
+          </button>
           {mine && Object.keys(days).filter((d) => !d.startsWith("__")).length === 0 && (
             <div className="td-card td-onboard">
               <div className="td-onboardhead">🌱 우리의 하루, 시작해볼까요?</div>
@@ -2046,6 +2068,25 @@ export default function Page() {
         </>)}
 
         {view === "review" && (<>
+          <div className="td-review td-card td-battle">
+            <h3>🥊 이번 주 배틀</h3>
+            <div className="td-battlerow">
+              {["a", "b"].map((s) => { const sc = battleNow[s]; const lead = battleNow.winner === s; return (
+                <div key={s} className={"td-battleside" + (lead ? " lead" : "")}>
+                  <div className="td-battlename">{THEME[s].emoji} {names[s]}{lead ? " 👑" : ""}</div>
+                  <div className="td-battlescore">{sc.total}<small>점</small></div>
+                  <div className="td-battledetail">😴 수면목표 {sc.sleepDays}일{sc.pgScore != null ? ` · 🎯 목표 ${sc.pgScore}점` : ""}</div>
+                </div>); })}
+            </div>
+            <div className="td-battlehint">{battleNow.winner === "draw" ? "팽팽해! 🔥" : `${names[battleNow.winner]} 리드 중 — 일요일 밤 승자 +50p`}</div>
+            {(battlePrev.a.logged > 0 || battlePrev.b.logged > 0) && (
+              <div className="td-battleprev">
+                <b>지난주 결과</b> {names.a} {battlePrev.a.total} : {battlePrev.b.total} {names.b} → {battlePrev.winner === "draw" ? "무승부" : `${names[battlePrev.winner]} 승!`}
+                {!prevClaimed && battlePrev.winner !== (me === "a" ? "b" : "a") && <button className="td-qbtn" style={{ marginLeft: 8 }} onClick={claimBattle}>{battlePrev.winner === "draw" ? "+20p 받기" : "🏆 +50p 받기"}</button>}
+                {prevClaimed && <span style={{ color: "var(--muted)" }}> · 받음 ✓</span>}
+              </div>
+            )}
+          </div>
           <div className="td-review td-card">
             <h3>🗂️ 주차별 기록</h3>
             {(() => {
@@ -2477,6 +2518,17 @@ const css = `
 .td-guessdone{ margin-top:8px; font-size:12.5px; color:var(--muted); }
 .td-judgebox{ margin-top:10px; padding:10px 12px; border-radius:var(--r-sm); background:var(--soft); }
 .td-judgebtns{ display:flex; gap:8px; margin-top:6px; } .td-judgebtns .td-qbtn{ flex:1; } .td-qbtn.ghost{ background:var(--card); color:var(--ink); border:1.5px solid var(--line); }
+.td-battle h3{ margin-bottom:var(--sp3); }
+.td-battlerow{ display:flex; gap:var(--sp3); }
+.td-battleside{ flex:1; text-align:center; padding:var(--sp3); border-radius:var(--r-sm); background:var(--soft2); border:1.5px solid var(--line); }
+.td-battleside.lead{ background:var(--soft); border-color:var(--c1); }
+.td-battlename{ font-family:'Jua'; font-size:13px; margin-bottom:4px; }
+.td-battlescore{ font-family:'Jua'; font-size:28px; color:var(--c1); line-height:1; } .td-battlescore small{ font-size:12px; margin-left:2px; color:var(--muted); }
+.td-battledetail{ font-size:11px; color:var(--muted); margin-top:6px; }
+.td-battlehint{ text-align:center; font-size:12.5px; color:var(--ink); margin-top:var(--sp3); font-family:'Jua'; }
+.td-battleprev{ margin-top:var(--sp3); padding-top:var(--sp3); border-top:1px solid var(--line); font-size:12.5px; color:var(--ink); display:flex; align-items:center; flex-wrap:wrap; gap:4px; } .td-battleprev b{ font-family:'Jua'; margin-right:4px; }
+.td-battlemini{ width:100%; display:flex; align-items:center; gap:8px; padding:11px 14px; margin-bottom:var(--sp3); border:none; background:var(--card); font-family:'Gowun Dodum'; font-size:13px; color:var(--ink); cursor:pointer; text-align:left; }
+.td-battlemini b{ font-family:'Jua'; font-size:14px; } .td-battlemini span{ margin-left:auto; font-size:11.5px; color:var(--c1); font-family:'Jua'; white-space:nowrap; }
 .td-zeropraise{ margin-top:8px; padding:9px 12px; border-radius:var(--r-sm); background:var(--good); color:#3DAE7B; font-size:12.5px; font-family:'Gowun Dodum'; }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
