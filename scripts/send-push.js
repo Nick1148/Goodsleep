@@ -34,15 +34,40 @@ const sleepMinutes = (bed, wake) => {
   let m = wh * 60 + wm - (bh * 60 + bm); if (m <= 0) m += 1440; return m;
 };
 
-async function rpc(fn, body) {
-  const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
-    method: "POST",
-    headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const txt = await r.text();
-  if (!r.ok) throw new Error(`${fn} ${r.status}: ${txt}`);
-  return txt ? JSON.parse(txt) : null;
+// Supabase 게이트웨이가 가끔 504/503을 돌려준다(하루 수백 번 도는 동안 1% 안팎).
+// 일시적인 것은 몇 번 다시 시도하고, 그래도 안 되면 transient 표시를 달아 올려보낸다.
+// 401/404 같은 진짜 오류는 표시 없이 바로 올려서 실패로 남긴다.
+const TRANSIENT_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function rpc(fn, body, { retries = 3 } = {}) {
+  let last;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    let r, txt;
+    try {
+      r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+        method: "POST",
+        headers: { apikey: ANON, Authorization: `Bearer ${ANON}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15000),
+      });
+      txt = await r.text();
+    } catch (err) {
+      last = Object.assign(new Error(`${fn} 네트워크 오류: ${err.message}`), { transient: true });
+      if (attempt < retries) { console.log(`${last.message} — ${attempt}차 실패, 재시도`); await sleep(attempt * 2000); continue; }
+      throw last;
+    }
+    if (r.ok) return txt ? JSON.parse(txt) : null;
+
+    const err = Object.assign(new Error(`${fn} ${r.status}: ${txt}`), {
+      status: r.status,
+      transient: TRANSIENT_STATUS.has(r.status),
+    });
+    if (!err.transient) throw err;
+    last = err;
+    if (attempt < retries) { console.log(`${err.message} — ${attempt}차 실패, 재시도`); await sleep(attempt * 2000); }
+  }
+  throw last;
 }
 
 async function sendRedemptionPushes() {
@@ -179,4 +204,13 @@ function quoteFor(slot, localDate, dowMon, days, goals) {
   await sendRedemptionPushes();
   await sendMessagePushes();
   await sendActivityPushes();
-})().catch((e) => { console.error(e); process.exit(1); });
+})().catch((e) => {
+  if (e && e.transient) {
+    // Supabase의 일시적 오류. 이 워크플로는 10분마다 돌고 발송 창이 ±5분이라
+    // 다음 회차가 그대로 이어받는다. 실패로 남기면 메일만 쌓이므로 건너뛴다.
+    console.warn(`일시적 오류로 이번 회차를 건너뜁니다: ${e.message}`);
+    process.exit(0);
+  }
+  console.error(e);
+  process.exit(1);
+});
