@@ -1272,9 +1272,10 @@ export default function Page() {
     });
   };
   const trackMealsFor = (slot) => { const gg = goals[slot] || {}; return gg.trackMeals !== undefined ? !!gg.trackMeals : slot === "b"; };
+  const trackSnackFor = (slot) => { const gg = goals[slot] || {}; return gg.trackSnack !== undefined ? !!gg.trackSnack : true; };
   const isCompleteEntry = (slot, en) => {
     if (!en) return false;
-    const base = en.bed && en.wake && en.snack >= 0 && (en.mood || 0) > 0 && (en.gratitude || []).some((x) => (x || "").trim()) && (en.reflection || "").trim();
+    const base = en.bed && en.wake && (!trackSnackFor(slot) || en.snack >= 0) && (en.mood || 0) > 0 && (en.gratitude || []).some((x) => (x || "").trim()) && (en.reflection || "").trim();
     if (!base) return false;
     if (trackMealsFor(slot)) return !!(en.meals && (en.meals.breakfast || en.meals.lunch || en.meals.dinner));
     return true;
@@ -1712,7 +1713,7 @@ export default function Page() {
   const lastMonthD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
   const lastMonth = monthMetrics(page, lastMonthD.getFullYear(), lastMonthD.getMonth() + 1);
   const monthRegLabel = regLabel(thisMonth.spread);
-  const ringItems = [!!(e.bed && e.wake), e.snack >= 0, (e.mood || 0) > 0, (e.gratitude || []).some((x) => (x || "").trim()), !!(e.reflection || "").trim(), ...(trackMealsFor(page) ? [!!(e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner))] : [])];
+  const ringItems = [!!(e.bed && e.wake), ...(trackSnackFor(page) ? [e.snack >= 0] : []), (e.mood || 0) > 0, (e.gratitude || []).some((x) => (x || "").trim()), !!(e.reflection || "").trim(), ...(trackMealsFor(page) ? [!!(e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner))] : [])];
   const ringDone = ringItems.filter(Boolean).length; const ringTotal = ringItems.length;
   const viewedComplete = isCompleteEntry(page, e);
   const buddyMood = viewedComplete ? "celebrate" : (mins == null ? "curious" : (mood.sleepy ? "sleepy" : "happy"));
@@ -1959,11 +1960,11 @@ export default function Page() {
                   <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={onExercise} disabled={!mine}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
                   {e.exercise && <input className="td-input" placeholder="뭐 했어? (예: 런닝 30분)" value={e.exNote} disabled={!mine} onChange={(ev) => updateEntry(page, { exNote: ev.target.value })} />}
                 </>) },
-              { k: "snack", label: "🍪 간식", filled: e.snack >= 0, sum: e.snack >= 0 ? (SNACKS[e.snack] + (e.snackNote ? " · " + e.snackNote : "")) : "미기록",
+              ...(trackSnackFor(page) ? [{ k: "snack", label: "🍪 간식", filled: e.snack >= 0, sum: e.snack >= 0 ? (SNACKS[e.snack] + (e.snackNote ? " · " + e.snackNote : "")) : "미기록",
                 body: (<>
                   <div className="td-chips">{SNACKS.map((s, i) => (<button key={i} className={"td-chip" + (e.snack === i ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { snack: e.snack === i ? -1 : i })}>{s}</button>))}</div>
                   {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자)" value={e.snackNote} disabled={!mine} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
-                </>) },
+                </>) }] : []),
               { k: "mood", label: "🙂 오늘 기분", filled: (e.mood || 0) > 0, sum: (e.mood || 0) > 0 ? MOODS[e.mood - 1] : "미기록",
                 body: (<div className="td-chips">{MOODS.map((m2, i) => (<button key={i} className={"td-chip td-moodchip" + (e.mood === i + 1 ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { mood: e.mood === i + 1 ? 0 : i + 1 })}>{m2}</button>))}</div>) },
               ...(trackMealsFor(page) ? [{ k: "meals", label: "🍽️ 오늘의 식단", cls: " td-meals", filled: !!(e.meals.breakfast || e.meals.lunch || e.meals.dinner), sum: [e.meals.breakfast, e.meals.lunch, e.meals.dinner].filter(Boolean).join(" / ") || "미기록",
@@ -2038,6 +2039,7 @@ export default function Page() {
                   ))}
                 </div>
               </div>
+              <div className="td-goalrow"><label>🍪 간식 기록</label><button className={"td-exbtn" + (trackSnackFor(page) ? " on" : "")} disabled={!mine} onClick={() => saveGoal(page, { trackSnack: !trackSnackFor(page) })}>{trackSnackFor(page) ? "켬" : "끔"}</button></div>
               <div className="td-goalrow"><label>🍽️ 식단 기록</label><button className={"td-exbtn" + (trackMealsFor(page) ? " on" : "")} disabled={!mine} onClick={() => saveGoal(page, { trackMeals: !trackMealsFor(page) })}>{trackMealsFor(page) ? "켬" : "끔"}</button></div>
               <div className="td-goalrow"><label>아침 문구 톤</label>
                 <div className="td-chips" style={{ flex: "0 0 auto" }}>
