@@ -866,6 +866,7 @@ export default function Page() {
   const [answers, setAnswers] = useState([]);
   const [guesses, setGuesses] = useState([]);
   const [guessInput, setGuessInput] = useState("");
+  const [showReport, setShowReport] = useState(false);
   const [qInput, setQInput] = useState("");
   const [cheerText, setCheerText] = useState("");
   const [showCheerBox, setShowCheerBox] = useState(false);
@@ -1738,7 +1739,6 @@ export default function Page() {
     for (let ref = "2026-09-14"; ref < weekDates(today())[0]; ref = addDays(ref, 7)) { const b2 = battleFor(weekDates(ref)); if (b2.a.logged + b2.b.logged > 0) bt[b2.winner]++; }
     return { first, dayN, per, ansA, ansB, bothDays, firstCnt, gs, bt };
   })();
-  const [showReport, setShowReport] = useState(false);
   const reg = regLabel(cur.spread); const fb = makeFeedback(cur, prev, g);
   const exPct = Math.min(100, Math.round((cur.exDays / Math.max(1, g.exerciseWeekly)) * 100));
   const sd = sleepDebtFor(page, g);
