@@ -1702,6 +1702,43 @@ export default function Page() {
   const battlePrev = battleFor(lastWeek);
   const prevClaimed = ledger.some((r) => r.slot === me && (r.reason === "battle" || r.reason === "battle_draw") && r.ref_date === lastWeek[0]);
   const claimBattle = () => { const res = battlePrev.winner === me ? "win" : battlePrev.winner === "draw" ? "draw" : "lose"; if (res === "lose") return; supabase.rpc("gs2_battle_claim", { p_code: code, p_slot: me, p_week: lastWeek[0], p_result: res }).then(() => { supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }); fireCelebrate(res === "win" ? "지난주 배틀 승리! 🪙+50" : "무승부! 🪙+20"); }); };
+  // ---- 💯 우리 100일 리포트 (둘이 같은 화면) ----
+  const report = (() => {
+    const dates = Object.keys(days).filter((d) => !d.startsWith("__") && d <= today()).sort();
+    if (!dates.length) return null;
+    const first = dates[0];
+    const dayN = Math.round((new Date(today()) - new Date(first)) / 86400000) + 1;
+    const per = {};
+    ["a", "b"].forEach((s) => {
+      const gg = goals[s] || {}; const sh = gg.sleepHours || 7; const pn = names[s === "a" ? "b" : "a"];
+      let rec = 0, mins = [], beds = [], hitWd = [0, 0], hitWe = [0, 0], ex = 0, moods = [], mention = 0, longest = 0, run = 0, prevD = null;
+      dates.forEach((d) => {
+        const e = days[d]?.[s]; if (!e || !hasEntry(e)) { return; }
+        rec++;
+        if (prevD && addDays(prevD, 1) === d) run++; else run = 1; longest = Math.max(longest, run); prevD = d;
+        const mm = sleepMinutes(e.bed, e.wake);
+        if (mm != null) { mins.push(mm); beds.push(bedMin(e.bed)); const dow = new Date(d).getDay(); const we = dow === 0 || dow === 6; const ok = mm >= (sh - 0.5) * 60; (we ? hitWe : hitWd)[0] += ok ? 1 : 0; (we ? hitWe : hitWd)[1]++; }
+        if (e.exercise) ex++; if ((e.mood || 0) > 0) moods.push(e.mood);
+        const txt = ((e.gratitude || []).join(" ") + " " + (e.reflection || "")).toLowerCase();
+        if (txt.includes(String(pn).toLowerCase()) || /자기|오빠|여친|남친|애인/.test(txt)) mention++;
+      });
+      const avg = (arr) => arr.length ? arr.reduce((x, y) => x + y, 0) / arr.length : null;
+      const avgBed = avg(beds); const pct = (h) => h[1] ? Math.round(100 * h[0] / h[1]) : null;
+      per[s] = { rec, longest, nights: mins.length, avgH: avg(mins) != null ? (avg(mins) / 60).toFixed(1) : "-",
+        avgBed: avgBed != null ? `${String(Math.floor((avgBed % 1440) / 60)).padStart(2, "0")}:${String(Math.round(avgBed % 60)).padStart(2, "0")}` : "-",
+        goalPct: pct([hitWd[0] + hitWe[0], hitWd[1] + hitWe[1]]), wdPct: pct(hitWd), wePct: pct(hitWe), ex, mood: avg(moods) != null ? avg(moods).toFixed(1) : "-", mention, mentionPct: rec ? Math.round(100 * mention / rec) : 0 };
+    });
+    const ansA = answers.filter((x) => x.slot === "a").length, ansB = answers.filter((x) => x.slot === "b").length;
+    const bothDays = new Set(answers.filter((x) => x.slot === "a").map((x) => x.qdate)).size && answers.filter((x) => x.slot === "a").map((x) => x.qdate).filter((q) => answers.some((y) => y.slot === "b" && y.qdate === q)).length;
+    const firstCnt = { a: 0, b: 0 };
+    const byQ = {}; answers.forEach((x) => { (byQ[x.qdate] = byQ[x.qdate] || []).push(x); });
+    Object.values(byQ).forEach((arr) => { if (arr.length === 2 && arr[0].created_at && arr[1].created_at) firstCnt[arr[0].created_at < arr[1].created_at ? arr[0].slot : arr[1].slot]++; });
+    const gs = {}; ["a", "b"].forEach((s) => { const g2 = guesses.filter((x) => x.slot === s); const j = g2.filter((x) => x.judged); gs[s] = { n: g2.length, judged: j.length, correct: j.filter((x) => x.correct).length, pct: j.length ? Math.round(100 * j.filter((x) => x.correct).length / j.length) : null }; });
+    const bt = { a: 0, b: 0, draw: 0 };
+    for (let ref = "2026-09-14"; ref < weekDates(today())[0]; ref = addDays(ref, 7)) { const b2 = battleFor(weekDates(ref)); if (b2.a.logged + b2.b.logged > 0) bt[b2.winner]++; }
+    return { first, dayN, per, ansA, ansB, bothDays, firstCnt, gs, bt };
+  })();
+  const [showReport, setShowReport] = useState(false);
   const reg = regLabel(cur.spread); const fb = makeFeedback(cur, prev, g);
   const exPct = Math.min(100, Math.round((cur.exDays / Math.max(1, g.exerciseWeekly)) * 100));
   const sd = sleepDebtFor(page, g);
@@ -2070,6 +2107,31 @@ export default function Page() {
         </>)}
 
         {view === "review" && (<>
+          <div className="td-review td-card td-report">
+            <button className="td-reporthead" onClick={() => setShowReport((v) => !v)}>
+              <span>💯 우리 {report ? report.dayN : 0}일째 리포트</span><small>{report ? `${report.first.replace(/-/g, ".")}부터 · ${showReport ? "접기 ▲" : "펼치기 ▼"}` : ""}</small>
+            </button>
+            {showReport && report && (() => { const A = report.per.a, B = report.per.b; const R = (lb, va, vb, hi) => (<div className="td-reprow"><span className={hi === "a" ? "hi" : ""}>{va}</span><b>{lb}</b><span className={hi === "b" ? "hi" : ""}>{vb}</span></div>); const hi = (x, y, big = true) => x === y ? "" : ((x > y) === big ? "a" : "b"); return (<>
+              <div className="td-repnames"><span>{THEME.a.emoji} {names.a}</span><span>{THEME.b.emoji} {names.b}</span></div>
+              <div className="td-repsec">📝 기록</div>
+              {R("기록한 날", `${A.rec}일`, `${B.rec}일`, hi(A.rec, B.rec))}
+              {R("최장 연속", `${A.longest}일`, `${B.longest}일`, hi(A.longest, B.longest))}
+              {R("운동한 날", `${A.ex}일`, `${B.ex}일`, hi(A.ex, B.ex))}
+              <div className="td-repsec">😴 수면</div>
+              {R("평균 수면", `${A.avgH}h`, `${B.avgH}h`, hi(+A.avgH, +B.avgH))}
+              {R("평균 취침", A.avgBed, B.avgBed, "")}
+              {R("목표 달성률", `${A.goalPct ?? "-"}%`, `${B.goalPct ?? "-"}%`, hi(A.goalPct, B.goalPct))}
+              {R("주중 / 주말", `${A.wdPct ?? "-"}% / ${A.wePct ?? "-"}%`, `${B.wdPct ?? "-"}% / ${B.wePct ?? "-"}%`, "")}
+              {R("평균 기분", `${A.mood}/5`, `${B.mood}/5`, hi(+A.mood, +B.mood))}
+              <div className="td-repsec">💬 우리</div>
+              {R("질문 답변", `${report.ansA}개`, `${report.ansB}개`, hi(report.ansA, report.ansB))}
+              {R("먼저 답한 날", `${report.firstCnt.a}번`, `${report.firstCnt.b}번`, hi(report.firstCnt.a, report.firstCnt.b))}
+              {R("답 맞히기", report.gs.a.pct != null ? `${report.gs.a.pct}% (${report.gs.a.correct}/${report.gs.a.judged})` : "-", report.gs.b.pct != null ? `${report.gs.b.pct}% (${report.gs.b.correct}/${report.gs.b.judged})` : "-", hi(report.gs.a.pct ?? -1, report.gs.b.pct ?? -1))}
+              {R("감사일기에 상대 언급", `${A.mentionPct}%`, `${B.mentionPct}%`, hi(A.mentionPct, B.mentionPct))}
+              {R("🥊 배틀 전적", `${report.bt.a}승`, `${report.bt.b}승`, hi(report.bt.a, report.bt.b))}
+              <div className="td-repfoot">둘 다 답한 질문 {report.bothDays}개 · 무승부 {report.bt.draw}회 · 진한 쪽이 앞선 항목</div>
+            </>); })()}
+          </div>
           <div className="td-review td-card td-battle">
             <h3>🥊 이번 주 배틀</h3>
             <div className="td-battlerow">
@@ -2531,6 +2593,14 @@ const css = `
 .td-battleprev{ margin-top:var(--sp3); padding-top:var(--sp3); border-top:1px solid var(--line); font-size:12.5px; color:var(--ink); display:flex; align-items:center; flex-wrap:wrap; gap:4px; } .td-battleprev b{ font-family:'Jua'; margin-right:4px; }
 .td-battlemini{ width:100%; display:flex; align-items:center; gap:8px; padding:11px 14px; margin-bottom:var(--sp3); border:none; background:var(--card); font-family:'Gowun Dodum'; font-size:13px; color:var(--ink); cursor:pointer; text-align:left; }
 .td-battlemini b{ font-family:'Jua'; font-size:14px; } .td-battlemini span{ margin-left:auto; font-size:11.5px; color:var(--c1); font-family:'Jua'; white-space:nowrap; }
+.td-reporthead{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:8px; border:none; background:transparent; padding:0; cursor:pointer; font-family:'Jua'; font-size:16px; color:var(--ink); text-align:left; }
+.td-reporthead small{ font-family:'Gowun Dodum'; font-size:11.5px; color:var(--muted); white-space:nowrap; }
+.td-repnames{ display:flex; justify-content:space-between; margin:var(--sp3) 0 var(--sp2); font-family:'Jua'; font-size:13px; color:var(--c1); }
+.td-repsec{ font-family:'Jua'; font-size:12px; color:var(--muted); margin:var(--sp3) 0 4px; text-align:center; letter-spacing:1px; }
+.td-reprow{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.td-reprow > span:first-child{ text-align:left; } .td-reprow > span:last-child{ text-align:right; } .td-reprow b{ font-family:'Gowun Dodum'; font-weight:400; font-size:11.5px; color:var(--muted); white-space:nowrap; }
+.td-reprow span.hi{ font-family:'Jua'; color:var(--c1); }
+.td-repfoot{ margin-top:var(--sp3); font-size:11px; color:var(--muted); text-align:center; }
 .td-zeropraise{ margin-top:8px; padding:9px 12px; border-radius:var(--r-sm); background:var(--good); color:#3DAE7B; font-size:12.5px; font-family:'Gowun Dodum'; }
 .td-hello{ font-family:'Jua'; font-size:20px; color:var(--ink); letter-spacing:-.5px; line-height:1.3; min-width:0; overflow:hidden; }
 .td-hello small{ display:block; font-family:'Gowun Dodum'; font-size:12px; color:var(--muted); margin-top:3px; font-weight:400; white-space:nowrap; }
