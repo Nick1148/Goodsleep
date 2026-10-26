@@ -25,9 +25,10 @@ npm run dev
 
 1. 이 폴더를 GitHub 저장소에 올림 (`git init` → push)
 2. vercel.com → **Add New > Project** → 저장소 선택
-3. **Environment Variables** 에 아래 2개 추가:
-   - `NEXT_PUBLIC_SUPABASE_URL` = `https://cfztxjblbwrxtsvlpnyp.supabase.co`
-   - `NEXT_PUBLIC_SUPABASE_KEY` = `sb_publishable_tGZr2Zsa-iLW-Hr2sNUNkg_QYbGPt8G`
+3. **Environment Variables** 에 아래 2개 추가 (값은 Supabase > Project Settings > API 의 URL·publishable 키):
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_KEY`
+   - (선택) `NEXT_PUBLIC_SITE_URL` = 배포 주소 (OG 미리보기 절대 주소용)
 4. **Deploy**
 
 배포되면 나온 주소를 둘 다 폰에서 열고 → 같은 **공유 코드** 입력 →
@@ -42,8 +43,8 @@ npm run dev
 - 상대가 입력하면 실시간으로 내 화면에도 반영됨.
 - 스트릭/주간 수면 평균은 누적 데이터로 자동 계산.
 
-## ⚠️ 보안 메모 (둘이 쓰기엔 충분)
-공유 코드 방식이라 회원가입이 없어. 대신 **공개 키로 누구나 테이블 접근이 가능**해서,
-이론상 공유 코드를 아는 사람만 데이터를 보지만 코드가 길수록 안전해
-(예: `jiin-tessa-93f2k`). 더 단단히 잠그고 싶으면 Supabase Auth나
-코드별 RPC 방식으로 업그레이드 가능 — 필요하면 말해줘.
+## ⚠️ 보안 메모
+- 브라우저에 들어가는 `sb_publishable_...` 키는 공개용 키라 노출돼도 괜찮지만, **권한은 DB 함수가 지켜야** 해요.
+- 기록은 로그인 + 커플 연결을 확인하는 `gs2_*` 함수로만 읽고 써요. 공유 코드만으로 접근하던 예전 경로를
+  막는 SQL 은 `supabase/migrations/20261027_security_hardening.sql` 에 있어요 (적용 방법은 `작업보고.md`).
+- 이 저장소는 공개 저장소라 백업 원문을 커밋하면 안 돼요. 주간 백업은 `BACKUP_PASSPHRASE` 로 암호화해서 올려요.

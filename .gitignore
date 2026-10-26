@@ -1,4 +1,8 @@
 node_modules
 .next
 .DS_Store
-# .env.local 은 공개 키만 들어있어 커밋해도 되지만, 원하면 무시하세요
+
+
+# 백업 원문(개인 기록)은 절대 커밋하지 않는다. 암호화된 .json.gpg 만 허용.
+backups/*.json
+.env*.local

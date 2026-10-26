@@ -70,6 +70,14 @@ async function rpc(fn, body, { retries = 3 } = {}) {
   throw last;
 }
 
+// 보안 마이그레이션(supabase/migrations/20261027_security_hardening.sql) 적용 후에는
+// 공유 코드만으로 부르던 gs_get / gs_delete_sub 를 쓸 수 없으므로 비밀값 확인 버전을 먼저 쓰고,
+// 아직 적용 전이라 새 함수가 없으면(404) 예전 함수로 돌아간다.
+async function rpcWithFallback(fn, body, legacyFn, legacyBody) {
+  try { return await rpc(fn, body); }
+  catch (e) { if (e && e.status === 404) return rpc(legacyFn, legacyBody); throw e; }
+}
+
 async function sendRedemptionPushes() {
   const rows = await rpc("gs_redeem_unnotified", { p_secret: BACKUP_SECRET });
   if (!rows || !rows.length) return;
@@ -125,7 +133,8 @@ async function send(row, msg) {
   } catch (err) {
     console.log(`send fail ${row.couple_code}/${row.slot}: ${err.statusCode || err.message}`);
     if (err.statusCode === 404 || err.statusCode === 410) {
-      await rpc("gs_delete_sub", { p_code: row.couple_code, p_slot: row.slot }).catch(() => {});
+      await rpcWithFallback("gs_delete_sub_secret", { p_secret: BACKUP_SECRET, p_code: row.couple_code, p_slot: row.slot },
+        "gs_delete_sub", { p_code: row.couple_code, p_slot: row.slot }).catch(() => {});
     }
     return false;
   }
@@ -134,7 +143,7 @@ async function send(row, msg) {
 const coupleCache = {};
 async function getCoupleData(code) {
   if (coupleCache[code]) return coupleCache[code];
-  const rows = await rpc("gs_get", { p_code: code }).catch(() => []);
+  const rows = await rpcWithFallback("gs_get_secret", { p_secret: BACKUP_SECRET, p_code: code }, "gs_get", { p_code: code }).catch(() => []);
   const days = {}, goals = {};
   (rows || []).forEach((r) => {
     if (r.date === "__goals__") goals[r.slot] = r.data || {};

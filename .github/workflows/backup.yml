@@ -20,10 +20,16 @@ jobs:
           SUPABASE_URL: https://cfztxjblbwrxtsvlpnyp.supabase.co
           ANON: sb_publishable_tGZr2Zsa-iLW-Hr2sNUNkg_QYbGPt8G
           BACKUP_SECRET: ${{ secrets.BACKUP_SECRET }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
         run: |
+          # 이 저장소는 공개(public)라서 백업 원문(일기·감사 기록)을 그대로 커밋하면 누구나 볼 수 있다.
+          # 원문은 러너 임시 폴더에만 두고, 암호화한 파일(.json.gpg)만 커밋한다.
+          if [ -z "$BACKUP_PASSPHRASE" ]; then
+            echo "❌ BACKUP_PASSPHRASE 시크릿이 없어요 — 원문 백업을 커밋하지 않고 중단합니다"; exit 1
+          fi
           mkdir -p backups
           DATE=$(date +%F)
-          FILE="backups/backup-$DATE.json"
+          FILE="$RUNNER_TEMP/backup-$DATE.json"
           HTTP=$(curl -s -w "%{http_code}" -o "$FILE" \
             -X POST "$SUPABASE_URL/rest/v1/rpc/gs_backup" \
             -H "apikey: $ANON" \
@@ -39,13 +45,16 @@ jobs:
           if [ "$BYTES" -lt 3 ]; then
             echo "❌ 백업이 비어있음 — BACKUP_SECRET이 틀렸을 수 있어요"; exit 1
           fi
-          echo "✅ 백업 성공: $FILE"
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$BACKUP_PASSPHRASE" \
+            --symmetric --cipher-algo AES256 -o "backups/backup-$DATE.json.gpg" "$FILE"
+          rm -f "$FILE"
+          echo "✅ 백업 성공(암호화): backups/backup-$DATE.json.gpg"
 
       - name: Commit backup
         run: |
           git config user.name "backup-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add backups/
+          git add backups/*.gpg
           if git diff --staged --quiet; then
             echo "변경 없음 — 커밋 생략"
           else

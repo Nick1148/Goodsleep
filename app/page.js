@@ -5,7 +5,12 @@ import { supabase } from "../lib/supabaseClient";
 // ── utils ───────────────────────────────────────────────────────
 const pad = (n) => String(n).padStart(2, "0");
 const ymd = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const today = () => ymd(new Date());
+// 날짜·시간은 기기 시간대와 상관없이 한국 시간(KST, UTC+9) 기준으로 계산한다.
+const kstNow = () => new Date(Date.now() + 9 * 3600000); // getUTC* 로 읽으면 KST 값
+const today = () => { const k = kstNow(); return `${k.getUTCFullYear()}-${pad(k.getUTCMonth() + 1)}-${pad(k.getUTCDate())}`; };
+const kstHour = () => kstNow().getUTCHours();
+const kstMinutes = () => { const k = kstNow(); return k.getUTCHours() * 60 + k.getUTCMinutes(); };
+const dowOf = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)).getUTCDay(); }; // 0=일
 const addDays = (k, n) => { const [y, m, d] = k.split("-").map(Number); return ymd(new Date(y, m - 1, d + n)); };
 const DOW = ["일", "월", "화", "수", "목", "금", "토"];
 const DOW_MON = ["월", "화", "수", "목", "금", "토", "일"];
@@ -21,19 +26,21 @@ const sleepMood = (m) => {
   if (h <= 9) return { emoji: "😊", msg: "푹 잤네요!", sleepy: false };
   return { emoji: "💤", msg: "든든하게 충전 완료!", sleepy: false };
 };
-const greeting = () => { const h = new Date().getHours(); if (h < 6) return "늦은 밤이야"; if (h < 12) return "좋은 아침이야"; if (h < 18) return "좋은 오후야"; if (h < 22) return "좋은 저녁이야"; return "좋은 밤이야"; };
+const greeting = () => { const h = kstHour(); if (h < 6) return "늦은 밤이야"; if (h < 12) return "좋은 아침이야"; if (h < 18) return "좋은 오후야"; if (h < 22) return "좋은 저녁이야"; return "좋은 밤이야"; };
 const FIELDS = () => ({ bed: "", wake: "", exercise: false, exNote: "", snack: -1, snackNote: "", meals: { breakfast: "", lunch: "", dinner: "" }, mood: 0, gratitude: ["", "", ""], reflection: "", pg: null });
 const blankEntry = () => ({ ...FIELDS(), cheers: 0 });
 const dataForDb = (e) => { const { cheers, ...rest } = e; return rest; };
 const entryFromRow = (row) => { const d = row.data || {}; return { ...FIELDS(), ...d, meals: { breakfast: "", lunch: "", dinner: "", ...(d.meals || {}) }, cheers: row.cheers ?? 0 }; };
-// merge server data into local on poll: keep my own edits, take partner's from server, sync cheers on my slot
-const mergeDays = (prev, server, me) => {
+// merge server data into local on poll: 저장 대기 중인(dirty) 내 기록만 로컬 값을 지키고,
+// 나머지는 서버 값을 따른다 (다른 기기에서 고친 내 기록도 반영되도록). 응원 수는 항상 서버 기준.
+const mergeDays = (prev, server, me, dirty) => {
   const out = {}; const dates = new Set([...Object.keys(prev), ...Object.keys(server)]);
   dates.forEach((dk) => {
     const pd = prev[dk] || {}, sd = server[dk] || {}; const day = {};
     ["a", "b"].forEach((slot) => {
       const ps = pd[slot], ss = sd[slot];
-      if (slot === me) { if (ps) day[slot] = { ...ps, cheers: ss ? ss.cheers : ps.cheers }; else if (ss) day[slot] = ss; }
+      if (slot === me && ps && dirty && dirty.has(`${dk}:${slot}`)) day[slot] = { ...ps, cheers: ss ? ss.cheers : ps.cheers };
+      else if (slot === me) { if (ss) day[slot] = ss; else if (ps) day[slot] = ps; }
       else { if (ss) day[slot] = ss; else if (ps) day[slot] = ps; }
     });
     if (Object.keys(day).length) out[dk] = day;
@@ -673,7 +680,7 @@ const themeVars = (t, night) => {
   if (!night) return {
     ...base, "--pageBg": t.soft2, "--glowc": t.soft, "--card": "#ffffff", "--field": "#ffffff",
     "--soft": t.soft, "--soft2": t.soft2, "--grat": t.grat, "--gratline": t.gratLine,
-    "--ink": "#4A3F39", "--muted": "#B5A99E", "--line": "#F1E8DF", "--good": "#F0F8F1",
+    "--ink": "#4A3F39", "--muted": "#776C62", "--line": "#F1E8DF", "--good": "#F0F8F1",
     "--glass": "rgba(255,255,255,.62)", "--shadow": "rgba(120,90,60,.10)",
   };
   return {
@@ -836,7 +843,9 @@ function UnboxOverlay({ data, names, onClose, onOpened }) {
     </div>
   );
 }
-const LS_CODE = "couple-code", LS_ME = "couple-me", LS_NIGHT = "couple-night";
+const LS_CODE = "couple-code", LS_ME = "couple-me", LS_NIGHT = "couple-night", LS_PENDING = "gs-pending-saves";
+const readPending = () => { try { return JSON.parse(localStorage.getItem(LS_PENDING) || "{}") || {}; } catch (e) { return {}; } };
+const writePending = (obj) => { try { if (Object.keys(obj).length) localStorage.setItem(LS_PENDING, JSON.stringify(obj)); else localStorage.removeItem(LS_PENDING); } catch (e) {} };
 
 export default function Page() {
   const [code, setCode] = useState(null);
@@ -891,6 +900,11 @@ export default function Page() {
   const [shopEdit, setShopEdit] = useState(false);
   const [initFilled, setInitFilled] = useState({});
   const saveTimers = useRef({});
+  const dirtyRef = useRef(new Set()); // 아직 서버에 저장되지 않은 내 기록 "날짜:슬롯"
+  const goalTimer = useRef(null);
+  const reloadRef = useRef(null);
+  const [loadError, setLoadError] = useState(false);
+  const [online, setOnline] = useState(true);
 
   // ---- Phase 2: Auth (병행 모드) ----
   const [session, setSession] = useState(null);
@@ -1074,7 +1088,7 @@ export default function Page() {
       const c = localStorage.getItem(LS_CODE); const m = localStorage.getItem(LS_ME); const n = localStorage.getItem(LS_NIGHT);
       if (c) { setCode(c); setPage(m === "b" ? "b" : "a"); setMe(m === "b" ? "b" : "a"); }
       if (n === "1") setNight(true); else if (n === "0") setNight(false);
-      else { const h = new Date().getHours(); if (h >= 20 || h < 6) setNight(true); }
+      else { const h = kstHour(); if (h >= 20 || h < 6) setNight(true); }
     } catch (e) {}
     setReady(true);
   }, []);
@@ -1108,47 +1122,76 @@ export default function Page() {
       });
       return { nd, ng, ls };
     };
+    // 같은 응답이면 state 를 바꾸지 않아 10초마다 전체 화면이 다시 그려지지 않게 한다
+    const sig = {};
+    const changed = (k, v) => { const j = JSON.stringify(v); if (sig[k] === j) return false; sig[k] = j; return true; };
+    let busy = false;
     const load = async (initial) => {
-      const { data: rows, error } = await supabase.rpc("gs2_get", { p_code: code });
-      if (!alive) return;
-      if (error) { if (initial) setLoading(false); return; }
-      const { nd, ng, ls } = parseRows(rows);
-      if (initial) { setDays(nd); setGoals(ng); setLoading(false);
-        if (!rows || rows.length === 0) supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: 120, p_reason: "welcome_kiss", p_ref_date: "2000-01-01" }).then(() => {});
-      }
-      else { setDays((prev) => mergeDays(prev, nd, me)); setGoals((prev) => ({ ...ng, [me]: prev[me] })); }
-      setLastSeen(ls);
-      const [{ data: mrows }, { data: crows }, { data: rrows }, { data: msgs }, { data: ans }, { data: inv }] = await Promise.all([
-        supabase.rpc("gs2_mileage_get", { p_code: code }),
-        supabase.rpc("gs2_catalog_get", { p_code: code }),
-        supabase.rpc("gs2_redeem_get", { p_code: code }),
-        supabase.rpc("gs2_msg_get", { p_code: code, p_me: me }),
-        supabase.rpc("gs2_qa_get", { p_code: code, p_me: me }),
-        supabase.rpc("gs2_inventory_get", { p_code: code }),
-      ]);
-      if (!alive) return;
-      if (mrows) setLedger(mrows);
-      if (crows) setCatalog(crows);
-      if (rrows) setRedeems(rrows);
-      if (msgs) setMessages(msgs);
-      if (ans) setAnswers(ans);
-      if (inv) setInventory(inv);
+      if (busy) return; busy = true;
+      try {
+        const { data: rows, error } = await supabase.rpc("gs2_get", { p_code: code });
+        if (!alive) return;
+        if (error) { setLoadError(true); if (initial) setLoading(false); return; }
+        setLoadError(false);
+        if (initial || changed("rows", rows)) {
+          if (initial) sig.rows = JSON.stringify(rows);
+          const { nd, ng, ls } = parseRows(rows);
+          if (initial) {
+            // 지난번에 저장 못 한 내 기록이 기기에 남아 있으면 화면에 되살리고 다시 보낸다
+            Object.entries(readPending()).forEach(([k, v]) => {
+              const [d, slot] = k.split(":"); if (v.code !== code || slot !== me) return;
+              nd[d] = nd[d] || {}; nd[d][slot] = { ...entryFromRow({ data: v.data }), cheers: nd[d][slot] ? nd[d][slot].cheers : 0 };
+              dirtyRef.current.add(k);
+            });
+            setDays(nd); setGoals(ng); setLoading(false);
+            if (!rows || rows.length === 0) supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: 120, p_reason: "welcome_kiss", p_ref_date: "2000-01-01" }).then(() => {});
+          }
+          else { setDays((prev) => mergeDays(prev, nd, me, dirtyRef.current)); setGoals((prev) => ({ ...ng, [me]: goalTimer.current ? prev[me] : ng[me] })); }
+          setLastSeen(ls);
+        }
+        const [{ data: mrows }, { data: crows }, { data: rrows }, { data: msgs }, { data: ans }, { data: inv }] = await Promise.all([
+          supabase.rpc("gs2_mileage_get", { p_code: code }),
+          supabase.rpc("gs2_catalog_get", { p_code: code }),
+          supabase.rpc("gs2_redeem_get", { p_code: code }),
+          supabase.rpc("gs2_msg_get", { p_code: code, p_me: me }),
+          supabase.rpc("gs2_qa_get", { p_code: code, p_me: me }),
+          supabase.rpc("gs2_inventory_get", { p_code: code }),
+        ]);
+        if (!alive) return;
+        if (mrows && changed("m", mrows)) setLedger(mrows);
+        if (crows && changed("c", crows)) setCatalog(crows);
+        if (rrows && changed("r", rrows)) setRedeems(rrows);
+        if (msgs && changed("msg", msgs)) setMessages(msgs);
+        if (ans && changed("ans", ans)) setAnswers(ans);
+        if (inv && changed("inv", inv)) setInventory(inv);
+      } catch (err) {
+        if (alive) { setLoadError(true); if (initial) setLoading(false); }
+      } finally { busy = false; }
     };
+    reloadRef.current = () => load(false);
     setLoading(true); load(true);
-    const iv = setInterval(() => load(false), 10000);
-    return () => { alive = false; clearInterval(iv); };
+    // 화면이 숨겨져 있을 때는 폴링을 멈추고, 다시 보이거나 온라인이 되면 바로 새로고침
+    const iv = setInterval(() => { if (!document.hidden && navigator.onLine !== false) load(false); }, 10000);
+    const onVis = () => { if (!document.hidden) load(false); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { alive = false; clearInterval(iv); document.removeEventListener("visibilitychange", onVis); reloadRef.current = null; };
   }, [code, me]);
 
   // 마일리지 자동 적립 체크 (내 기록 기준, 중복 적립은 DB에서 방지)
+  // 입력할 때마다 RPC 가 4~5개씩 나가던 것을 막기 위해: 입력이 1.5초 멈춘 뒤 한 번만 확인하고,
+  // 이번 세션에서 이미 보낸 적립 요청(사유·날짜·금액)은 다시 보내지 않는다.
+  const sentAwards = useRef(new Set());
+  const awardOnce = (key, fn) => { if (sentAwards.current.has(key)) return; sentAwards.current.add(key); fn(); };
   useEffect(() => {
     if (!code || loading || !me) return;
+    const tmo = setTimeout(() => {
     // 보고 있는 날짜(date) 기준으로 지급 — 과거 날짜를 소급 기록해도 그 날짜로 포인트 지급됨
     const en = days[date]?.[me];
-    const kissAward = (delta, reason, rd) => supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }));
-    if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", date); kissAward(POINTS.full, "daily", date); if (date === today()) supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "daily", p_ref_date: date }).then(() => {}); }
+    const kissAward = (delta, reason, rd) => awardOnce(`kiss:${reason}:${rd}:${delta}`, () => supabase.rpc("gs2_kiss_award", { p_code: code, p_slot: me, p_delta: delta, p_reason: reason, p_ref_date: rd }).then(() => supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); })));
+    if (isCompleteEntry(me, en)) { award(me, POINTS.full, "daily", date); kissAward(POINTS.full, "daily", date); if (date === today()) awardOnce(`notify:daily:${date}`, () => supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "daily", p_ref_date: date }).then(() => {})); }
     else if (hasEntry(en)) { award(me, POINTS.partial, "daily", date); kissAward(POINTS.partial, "daily", date); }
 
-    if (new Date().getDay() === 0) {
+    if (dowOf(today()) === 0) {
       const wk = weekDates(today());
       const m = metricsFor(me, wk);
       if (regLabel(m.spread).dots === 5) award(me, POINTS.weekly, "weekly_sleepreg", weekMonday(today()));
@@ -1170,6 +1213,8 @@ export default function Page() {
     if (streak >= 30) award(me, POINTS.m30, "milestone_30", SENTINEL);
     if (streak >= 100) award(me, POINTS.m100, "milestone_100", SENTINEL);
     if (streak >= 365) award(me, POINTS.m365, "milestone_365", SENTINEL);
+    }, 1500);
+    return () => clearTimeout(tmo);
   }, [code, loading, days, me, date]);
 
   // 날짜/사람 변경 시: 이미 채워진 항목은 접힌 상태로 시작
@@ -1219,6 +1264,15 @@ export default function Page() {
   const logout = () => { try { localStorage.removeItem(LS_CODE); localStorage.removeItem(LS_ME); } catch (e) {} setCode(null); setDays({}); setCodeInput(""); };
 
   const getEntry = (slot) => (days[date] && days[date][slot]) || blankEntry();
+  // 앱을 켜 둔 채 자정(KST)이 지나면 '오늘'을 보고 있던 화면을 새 날짜로 넘긴다
+  const todayRef = useRef(today());
+  useEffect(() => {
+    const iv = setInterval(() => {
+      const t = today(); const prevT = todayRef.current;
+      if (t !== prevT) { todayRef.current = t; setDate((d) => (d === prevT ? t : d)); setMonthRef((m) => (m.slice(0, 7) === prevT.slice(0, 7) ? t : m)); }
+    }, 30000);
+    return () => clearInterval(iv);
+  }, []);
   const [saveFailed, setSaveFailed] = useState(false);
 
   // ---- 🎂 생일 서프라이즈 (지인 8/1) ----
@@ -1256,22 +1310,48 @@ export default function Page() {
     });
   };
   const closeAnniv = () => { setAnnivOpen(false); try { localStorage.setItem("gs_anniv200", "1"); } catch (e) {} };
-  const pushData = (slot, entry) => {
-    const k = `${date}:${slot}`;
-    if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
-    saveTimers.current[k] = setTimeout(() => {
-      supabase.rpc("gs2_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(({ error }) => {
-        if (error) setSaveFailed(true);
-        else setSaveFailed(false);
-      }).catch(() => setSaveFailed(true));
-    }, 600);
+  // 저장: 먼저 기기(localStorage)에 대기열로 남기고 서버 저장이 성공하면 지운다.
+  // 오프라인/오류 때도 입력이 사라지지 않고, 온라인이 되면 자동으로 다시 보낸다.
+  const saveNow = (d, slot, entry) => {
+    const k = `${d}:${slot}`; const data = dataForDb(entry); const j = JSON.stringify(data);
+    const pend = readPending(); pend[k] = { code, data }; writePending(pend);
+    return supabase.rpc("gs2_save_data", { p_code: code, p_date: d, p_slot: slot, p_data: data }).then(({ error }) => {
+      if (error) { setSaveFailed(true); return false; }
+      const p2 = readPending(); if (p2[k] && JSON.stringify(p2[k].data) === j) { delete p2[k]; writePending(p2); }
+      if (!saveTimers.current[k]) dirtyRef.current.delete(k);
+      setSaveFailed(Object.values(readPending()).some((x) => x.code === code));
+      return true;
+    }).catch(() => { setSaveFailed(true); return false; });
   };
-  const updateEntry = (slot, patch) => { if (slot !== me) return; setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; }); };
-  const award = (slot, delta, reason, refDate) => {
-    supabase.rpc("gs2_mileage_award", { p_code: code, p_slot: slot, p_delta: delta, p_reason: reason, p_ref_date: refDate }).then(() => {
-      supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+  const retryPending = () => {
+    const pend = readPending();
+    Object.entries(pend).forEach(([k, v]) => {
+      if (v.code !== code) return;
+      const [d, slot] = k.split(":"); if (slot !== me) return;
+      saveNow(d, slot, v.data);
     });
   };
+  const pushData = (slot, entry) => {
+    const d = date; const k = `${d}:${slot}`;
+    dirtyRef.current.add(k);
+    if (saveTimers.current[k]) clearTimeout(saveTimers.current[k]);
+    saveTimers.current[k] = setTimeout(() => { delete saveTimers.current[k]; saveNow(d, slot, entry); }, 600);
+  };
+  useEffect(() => {
+    const on = () => { setOnline(true); if (code) { retryPending(); if (reloadRef.current) reloadRef.current(); } };
+    const off = () => setOnline(false);
+    setOnline(navigator.onLine !== false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+  }, [code, me]);
+  useEffect(() => { if (code && !loading) retryPending(); }, [code, me, loading]);
+  const updateEntry = (slot, patch) => { if (slot !== me) return; setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()), ...patch }; day[slot] = entry; pushData(slot, entry); return { ...prev, [date]: day }; }); };
+  const award = (slot, delta, reason, refDate) => awardOnce(`mile:${slot}:${reason}:${refDate}:${delta}`, () => {
+    supabase.rpc("gs2_mileage_award", { p_code: code, p_slot: slot, p_delta: delta, p_reason: reason, p_ref_date: refDate }).then(({ error }) => {
+      if (error) { sentAwards.current.delete(`mile:${slot}:${reason}:${refDate}:${delta}`); return; }
+      supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); });
+    });
+  });
   const trackMealsFor = (slot) => { const gg = goals[slot] || {}; return gg.trackMeals !== undefined ? !!gg.trackMeals : slot === "b"; };
   const trackSnackFor = (slot) => { const gg = goals[slot] || {}; return gg.trackSnack !== undefined ? !!gg.trackSnack : true; };
   const isCompleteEntry = (slot, en) => {
@@ -1281,12 +1361,31 @@ export default function Page() {
     if (trackMealsFor(slot)) return !!(en.meals && (en.meals.breakfast || en.meals.lunch || en.meals.dinner));
     return true;
   };
-  const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } const entry = getEntry(slot); supabase.rpc("gs2_save_data", { p_code: code, p_date: date, p_slot: slot, p_data: dataForDb(entry) }).then(() => { setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
+  const flushSave = (slot) => { const k = `${date}:${slot}`; if (saveTimers.current[k]) { clearTimeout(saveTimers.current[k]); delete saveTimers.current[k]; } saveNow(date, slot, getEntry(slot)).then((ok) => { if (!ok) return; setSavedFlash({ slot, ts: Date.now() }); setTimeout(() => setSavedFlash((f) => (f && f.slot === slot ? null : f)), 1800); }); };
   const updateMeal = (slot, key, val) => { const e = getEntry(slot); updateEntry(slot, { meals: { ...e.meals, [key]: val } }); };
   const autoGrow = (ev) => { const el = ev.target; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; };
   const autoGrowRef = (el) => { if (el && !el.dataset.grown) { el.dataset.grown = "1"; requestAnimationFrame(() => { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }); } };
   const sendCheer = (slot) => { setBurstKey((k) => k + 1); setDays((prev) => { const day = { ...(prev[date] || {}) }; const entry = { ...(day[slot] || blankEntry()) }; entry.cheers = (entry.cheers || 0) + 1; day[slot] = entry; supabase.rpc("gs2_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: entry.cheers }).then(() => {}); return { ...prev, [date]: day }; }); };
-  const saveGoal = (slot, patch) => { if (slot !== me) return; setGoals((prev) => { const g = { ...prev[slot], ...patch }; const next = { ...prev, [slot]: g }; supabase.rpc("gs2_save_goal", { p_code: code, p_slot: slot, p_data: g }).then(() => {}); if (patch.bedtime && pushState === "on") supabase.rpc("gs2_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {}); return next; }); };
+  // 목표/이름 입력은 글자마다 저장하지 않고 0.7초 뒤에 한 번 저장
+  const latestGoal = useRef(null);
+  const saveGoal = (slot, patch) => {
+    if (slot !== me) return;
+    const base = goalTimer.current && latestGoal.current ? latestGoal.current : goals[slot];
+    const g = { ...base, ...patch };
+    latestGoal.current = g;
+    setGoals((prev) => ({ ...prev, [slot]: { ...prev[slot], ...patch } }));
+    if (goalTimer.current) clearTimeout(goalTimer.current);
+    goalTimer.current = setTimeout(() => {
+      goalTimer.current = null;
+      supabase.rpc("gs2_save_goal", { p_code: code, p_slot: slot, p_data: latestGoal.current }).then(({ error }) => { if (error) setSaveFailed(true); });
+    }, 700);
+    if (patch.bedtime && pushState === "on") supabase.rpc("gs2_update_bedtime", { p_code: code, p_slot: me, p_bedtime: patch.bedtime }).then(() => {});
+  };
+  useEffect(() => {
+    const onKey = (ev) => { if (ev.key !== "Escape") return; setBigCeleb(null); setGachaResult(null); setGiftItem(null); setOpenLetter(null); setUnbox(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
   const fireCelebrate = (msg) => { setCelebrate({ key: Date.now(), msg }); setTimeout(() => setCelebrate(null), 2200); };
   useEffect(() => { if (code) supabase.rpc("gs2_guess_get", { p_code: code }).then(({ data }) => { if (data) setGuesses(data); }); }, [code]);
   const reloadSocial = () => {
@@ -1298,21 +1397,23 @@ export default function Page() {
     setBurstKey((k) => k + 1);
     supabase.rpc("gs2_save_cheers", { p_code: code, p_date: date, p_slot: slot, p_cheers: (getEntry(slot).cheers || 0) + 1 }).then(() => {});
     setDays((prev) => { const day = { ...(prev[date] || {}) }; const en = { ...(day[slot] || blankEntry()) }; en.cheers = (en.cheers || 0) + 1; day[slot] = en; return { ...prev, [date]: day }; });
-    if (text && text.trim()) supabase.rpc("gs2_msg_send", { p_code: code, p_from: me, p_to: slot, p_kind: "cheer", p_message: text.trim(), p_deliver: null }).then(reloadSocial);
+    if (text && text.trim()) supabase.rpc("gs2_msg_send", { p_code: code, p_from: me, p_to: slot, p_kind: "cheer", p_message: text.trim().slice(0, 1000), p_deliver: null }).then(reloadSocial);
     setShowCheerBox(false); setCheerText("");
   };
   const saveAnswer = () => {
     if (!qInput.trim()) return;
-    supabase.rpc("gs2_qa_save", { p_code: code, p_slot: me, p_qdate: today(), p_answer: qInput.trim() }).then(() => { setQInput(""); reloadSocial(); fireCelebrate("답변 완료! 💕"); supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "qa", p_ref_date: today() }).then(() => {}); });
+    supabase.rpc("gs2_qa_save", { p_code: code, p_slot: me, p_qdate: today(), p_answer: qInput.trim().slice(0, 1000) }).then(({ error }) => { if (error) { setPushMsg("답변을 저장하지 못했어요. 잠시 후 다시 눌러주세요."); return; } setQInput(""); reloadSocial(); fireCelebrate("답변 완료! 💕"); supabase.rpc("gs2_notify_activity", { p_code: code, p_slot: me, p_kind: "qa", p_ref_date: today() }).then(() => {}); });
   };
   const sendLetter = () => {
     if (!letterInput.msg.trim() || !letterInput.date) { setRedeemMsg("쪽지 내용과 배달 날짜를 정해줘요."); return; }
-    supabase.rpc("gs2_msg_send", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_kind: "letter", p_message: letterInput.msg.trim(), p_deliver: letterInput.date }).then(() => { setLetterInput({ msg: "", date: "" }); reloadSocial(); fireCelebrate("쪽지를 숨겨뒀어요 💌"); });
+    if (letterInput.date < today()) { setRedeemMsg("배달 날짜는 오늘 이후로 골라줘요."); return; }
+    supabase.rpc("gs2_msg_send", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_kind: "letter", p_message: letterInput.msg.trim().slice(0, 1000), p_deliver: letterInput.date }).then(({ error }) => { if (error) { setRedeemMsg("쪽지를 보내지 못했어요. 잠시 후 다시 시도해줘요."); return; } setLetterInput({ msg: "", date: "" }); reloadSocial(); fireCelebrate("쪽지를 숨겨뒀어요 💌"); });
   };
   const openMessage = (m) => { supabase.rpc("gs2_msg_open", { p_code: code, p_id: m.id }).then(reloadSocial); setOpenLetter(m); };
   const sendGift = () => {
     const amt = parseInt(giftInput, 10);
     if (!amt || amt <= 0) { setRedeemMsg("선물할 포인트를 입력해줘요."); return; }
+    if (amt > myBal) { setRedeemMsg("포인트가 부족해요 🥲"); return; }
     supabase.rpc("gs2_mileage_gift", { p_code: code, p_from: me, p_to: (me === "a" ? "b" : "a"), p_amount: amt }).then(({ data: ok }) => {
       if (ok) { setGiftInput(""); setBigCeleb({ key: Date.now(), title: `${amt}p 선물 완료! 💝`, sub: `${names[me === "a" ? "b" : "a"]}에게 마음을 보냈어요` }); supabase.rpc("gs2_mileage_get", { p_code: code }).then(({ data }) => { if (data) setLedger(data); }); reloadSocial(); }
       else setRedeemMsg("포인트가 부족해요 🥲");
@@ -1366,8 +1467,9 @@ export default function Page() {
   };
 
   const addReward = () => {
-    const title = newReward.title.trim(); const cost = parseInt(newReward.cost, 10);
+    const title = newReward.title.trim().slice(0, 40); const cost = parseInt(newReward.cost, 10);
     if (!title || !cost || cost <= 0) { setRedeemMsg("이름과 가격을 입력해줘요."); return; }
+    if (cost > 100000) { setRedeemMsg("가격은 100000p 이하로 정해줘요."); return; }
     supabase.rpc("gs2_catalog_add", { p_code: code, p_slot: me, p_title: title, p_emoji: newReward.emoji || "🎁", p_cost: cost }).then(() => {
       supabase.rpc("gs2_catalog_get", { p_code: code }).then(({ data }) => { if (data) setCatalog(data); });
       setNewReward({ emoji: "🎁", title: "", cost: "" });
@@ -1427,7 +1529,8 @@ export default function Page() {
   };
 
   const hasEntry = (e) => !!e && (e.bed || e.wake || e.exercise || e.exNote || e.snack >= 0 || e.snackNote || e.mood > 0 || (e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner)) || e.gratitude?.some((g) => g.trim()) || e.reflection?.trim());
-  const streakFor = (slot) => { let n = 0, cur = today(); for (let i = 0; i < 400; i++) { const d = days[cur]; if (d && hasEntry(d[slot])) { n++; cur = addDays(cur, -1); } else break; } return n; };
+  // 오늘 아직 기록 전이면 어제부터 센다 (아침에 연속 기록이 0일로 보이던 문제)
+  const streakFor = (slot) => { let n = 0, cur = today(); if (!hasEntry(days[cur]?.[slot])) cur = addDays(cur, -1); for (let i = 0; i < 400; i++) { const d = days[cur]; if (d && hasEntry(d[slot])) { n++; cur = addDays(cur, -1); } else break; } return n; };
 
   const weekDates = (ref) => { const [y, m, d] = ref.split("-").map(Number); const dt = new Date(y, m - 1, d); const dow = (dt.getDay() + 6) % 7; const mon = new Date(y, m - 1, d - dow); return [...Array(7)].map((_, i) => ymd(new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + i))); };
   const metricsFor = (slot, weekArr) => {
@@ -1510,7 +1613,7 @@ export default function Page() {
   // 아침 문구: 오늘 상황(운동일/전날 수면/요일)에 맞춰 카테고리 결정
   const quoteCategory = (slot) => {
     const gg = goals[slot] || defaultGoal();
-    const dowMon = (new Date().getDay() + 6) % 7; // 0=월 ... 6=일
+    const dowMon = (dowOf(today()) + 6) % 7; // 0=월 ... 6=일
     if ((gg.exerciseDays || []).includes(dowMon)) return "exercise";
     const y = days[addDays(today(), -1)]?.[slot];
     const m = y ? sleepMinutes(y.bed, y.wake) : null;
@@ -1550,7 +1653,7 @@ export default function Page() {
   const charOf = (slot) => (goals[slot] && goals[slot].charId) || (slot === "a" ? "fire" : "seal");
   const wrapStyle = ready ? themeVars(T[page || "a"], night) : themeVars(THEME.a, false);
 
-  if (!ready || !authChecked) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style>{css}</style><div className="td-loading">불러오는 중…</div></div>;
+  if (!ready || !authChecked) return <div className="td-wrap" style={themeVars(THEME.a, false)}><style dangerouslySetInnerHTML={{ __html: css }} /><div className="td-loading">불러오는 중…</div></div>;
 
   const installBanner = showInstall ? (
     <div className="td-install">
@@ -1561,7 +1664,7 @@ export default function Page() {
       )}
       <div className="td-installbtns">
         {!iosGuide && <button className="td-installadd" onClick={doInstall}>추가</button>}
-        <button className="td-installx" onClick={dismissInstall}>✕</button>
+        <button className="td-installx" onClick={dismissInstall} aria-label="설치 안내 닫기">✕</button>
       </div>
     </div>
   ) : null;
@@ -1570,35 +1673,25 @@ export default function Page() {
     // 앱 시작: 로그인 화면 (계정 필수, 레거시 코드 로그인은 접이식 임시 제공)
     return (
       <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
-        <style>{css}</style>
+        <style dangerouslySetInnerHTML={{ __html: css }} />
         {installBanner}
         <div className="td-login">
           <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
           <h1>우리의 하루</h1>
           <p>{authMode === "signup" ? "계정을 만들고 둘만의 기록을 시작해요." : "로그인하고 우리의 기록을 이어가요."}</p>
-          <input className="td-input" type="email" placeholder="이메일" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} />
-          <input className="td-input" type="password" placeholder="비밀번호" value={pwInput} onChange={(e) => setPwInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && authMode === "signin" && emailAuth()} style={{ marginTop: 8 }} />
-          {authMode === "signup" && <input className="td-input" type="password" placeholder="비밀번호 확인" value={pw2Input} onChange={(e) => setPw2Input(e.target.value)} onKeyDown={(e) => e.key === "Enter" && emailAuth()} style={{ marginTop: 8 }} />}
+          <input className="td-input" type="email" placeholder="이메일" aria-label="이메일" value={emailInput} onChange={(e) => setEmailInput(e.target.value)} />
+          <input className="td-input" type="password" placeholder="비밀번호" aria-label="비밀번호" value={pwInput} onChange={(e) => setPwInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && authMode === "signin" && emailAuth()} style={{ marginTop: 8 }} />
+          {authMode === "signup" && <input className="td-input" type="password" placeholder="비밀번호 확인" aria-label="비밀번호 확인" value={pw2Input} onChange={(e) => setPw2Input(e.target.value)} onKeyDown={(e) => e.key === "Enter" && emailAuth()} style={{ marginTop: 8 }} />}
           <button className="td-loginbtn" onClick={emailAuth} disabled={authBusy}>{authBusy ? "잠시만요…" : authMode === "signup" ? "계정 만들기" : "로그인"}</button>
           {authMsg && <small className="td-loginhint" style={{ color: authMsg.includes("보냈어요") ? "var(--c1)" : "#e55" }}>{authMsg}</small>}
-          <small className="td-loginhint" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthMsg(""); }} style={{ cursor: "pointer", textDecoration: "underline" }}>
+          <button type="button" className="td-loginhint td-linkbtn" onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthMsg(""); }}>
             {authMode === "signin" ? "처음이에요? 계정 만들기" : "이미 계정이 있어요? 로그인"}
-          </small>
+          </button>
           <div className="td-loginor"><span>또는</span></div>
           <button className="td-googlebtn" onClick={loginWithGoogle}>
             <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.9-2.26c-.8.54-1.84.86-3.06.86-2.35 0-4.34-1.59-5.05-3.72H.98v2.33A9 9 0 0 0 9 18z"/><path fill="#FBBC05" d="M3.95 10.7A5.4 5.4 0 0 1 3.66 9c0-.59.1-1.17.29-1.7V4.97H.98A9 9 0 0 0 0 9c0 1.45.35 2.83.98 4.03z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.51.46 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0A9 9 0 0 0 .98 4.97l2.97 2.33C4.66 5.17 6.65 3.58 9 3.58z"/></svg>
             Google로 계속하기
           </button>
-          <small className="td-loginhint" onClick={() => setShowLegacy(!showLegacy)} style={{ cursor: "pointer", textDecoration: "underline" }}>예전 공유 코드로 접속 (임시)</small>
-          {showLegacy && (<div style={{ marginTop: 8 }}>
-            <input className="td-input" placeholder="공유 코드" value={codeInput} onChange={(e) => setCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && login()} />
-            <div className="td-whopick">
-              <span>나는</span>
-              {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (meInput === p ? " on" : "")} onClick={() => setMeInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
-            </div>
-            <button className="td-loginbtn" onClick={login}>코드로 시작하기</button>
-            <small className="td-loginhint">코드 접속은 곧 종료돼요. 계정을 만들어 연결해주세요!</small>
-          </div>)}
         </div>
       </div>
     );
@@ -1607,7 +1700,7 @@ export default function Page() {
   if (pendingInvite) {
     return (
       <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
-        <style>{css}</style>
+        <style dangerouslySetInnerHTML={{ __html: css }} />
         <div className="td-login">
           <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
           <h1>커플이 만들어졌어요!</h1>
@@ -1626,7 +1719,7 @@ export default function Page() {
     // 로그인은 됐는데 아직 커플에 연결 안 된 상태: 기존 코드 연결 or 새 커플 만들기
     return (
       <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
-        <style>{css}</style>
+        <style dangerouslySetInnerHTML={{ __html: css }} />
         <div className="td-login">
           <div className="td-loginbuddy td-breathe"><FireBuddy mood="happy" /></div>
           <h1>거의 다 왔어요</h1>
@@ -1635,14 +1728,14 @@ export default function Page() {
             <span>나는</span>
             {["a", "b"].map((p) => (<button key={p} className={"td-whobtn" + (linkSlotInput === p ? " on" : "")} onClick={() => setLinkSlotInput(p)} style={{ "--tc": THEME[p].c1 }}>{THEME[p].emoji} {THEME[p].name}</button>))}
           </div>
-          <input className="td-input" placeholder="공유 코드가 있다면 입력" value={linkCodeInput} onChange={(e) => setLinkCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && linkCouple()} />
+          <input className="td-input" placeholder="공유 코드가 있다면 입력" aria-label="공유 코드가 있다면 입력" value={linkCodeInput} onChange={(e) => setLinkCodeInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && linkCouple()} />
           <button className="td-loginbtn" onClick={linkCouple} disabled={linking}>{linking ? "연결 중…" : "코드로 연결하기"}</button>
           {!inviteCode && (<>
             <div className="td-loginor"><span>또는</span></div>
             <button className="td-googlebtn" onClick={createCouple} disabled={linking}>💞 새 커플 만들기 (코드 자동 생성)</button>
           </>)}
           {linkMsg && <small className="td-loginhint" style={{ color: linkMsg.includes("예전에") ? "var(--c1)" : "#e55" }}>{linkMsg}</small>}
-          <small className="td-loginhint" onClick={logoutAuth} style={{ cursor: "pointer", textDecoration: "underline" }}>다른 계정으로 로그인</small>
+          <button type="button" className="td-loginhint td-linkbtn" onClick={logoutAuth}>다른 계정으로 로그인</button>
         </div>
       </div>
     );
@@ -1666,7 +1759,7 @@ export default function Page() {
   const todayQ = qForDate(date);
   const myGuess = guesses.find((g) => g.qdate === date && g.slot === me);
   const partnerGuess = guesses.find((g) => g.qdate === date && g.slot !== me);
-  const saveGuess = () => { if (!guessInput.trim()) return; supabase.rpc("gs2_guess_save", { p_code: code, p_slot: me, p_qdate: date, p_guess: guessInput.trim() }).then(() => { setGuessInput(""); reloadSocial(); }); };
+  const saveGuess = () => { if (!guessInput.trim()) return; supabase.rpc("gs2_guess_save", { p_code: code, p_slot: me, p_qdate: date, p_guess: guessInput.trim().slice(0, 200) }).then(({ error }) => { if (error) { setPushMsg("예측을 저장하지 못했어요. 다시 눌러주세요."); return; } setGuessInput(""); reloadSocial(); }); };
   const judgeGuess = (ok) => { supabase.rpc("gs2_guess_judge", { p_code: code, p_slot: me, p_qdate: date, p_correct: ok }).then(() => { reloadSocial(); if (ok) fireCelebrate(`${names[me === "a" ? "b" : "a"]} 정답! 💋+20`); }); };
   const myAns = answers.find((a) => a.qdate === date && a.slot === me);
   const partnerAns = answers.find((a) => a.qdate === date && a.slot !== me);
@@ -1718,7 +1811,7 @@ export default function Page() {
         rec++;
         if (prevD && addDays(prevD, 1) === d) run++; else run = 1; longest = Math.max(longest, run); prevD = d;
         const mm = sleepMinutes(e.bed, e.wake);
-        if (mm != null) { mins.push(mm); beds.push(bedMin(e.bed)); const dow = new Date(d).getDay(); const we = dow === 0 || dow === 6; const ok = mm >= (sh - 0.5) * 60; (we ? hitWe : hitWd)[0] += ok ? 1 : 0; (we ? hitWe : hitWd)[1]++; }
+        if (mm != null) { mins.push(mm); beds.push(bedMin(e.bed)); const dow = dowOf(d); const we = dow === 0 || dow === 6; const ok = mm >= (sh - 0.5) * 60; (we ? hitWe : hitWd)[0] += ok ? 1 : 0; (we ? hitWe : hitWd)[1]++; }
         if (e.exercise) ex++; if ((e.mood || 0) > 0) moods.push(e.mood);
         const txt = ((e.gratitude || []).join(" ") + " " + (e.reflection || "")).toLowerCase();
         if (txt.includes(String(pn).toLowerCase()) || /자기|오빠|여친|남친|애인/.test(txt)) mention++;
@@ -1745,9 +1838,9 @@ export default function Page() {
   const sdColor = sd.debt === 0 ? "#3DAE7B" : sd.debt <= 120 ? "#6FB98F" : sd.debt <= 300 ? "#E0A23B" : "#DC6B57";
   const moodTip = moodInsightFor(page, g);
   const cw = coupleWeek(thisWeek);
-  const nowD = new Date();
-  const thisMonth = monthMetrics(page, nowD.getFullYear(), nowD.getMonth() + 1);
-  const lastMonthD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+  const [tdY, tdM] = today().split("-").map(Number);
+  const thisMonth = monthMetrics(page, tdY, tdM);
+  const lastMonthD = new Date(tdY, tdM - 2, 1);
   const lastMonth = monthMetrics(page, lastMonthD.getFullYear(), lastMonthD.getMonth() + 1);
   const monthRegLabel = regLabel(thisMonth.spread);
   const ringItems = [!!(e.bed && e.wake), ...(trackSnackFor(page) ? [e.snack >= 0] : []), (e.mood || 0) > 0, (e.gratitude || []).some((x) => (x || "").trim()), !!(e.reflection || "").trim(), ...(trackMealsFor(page) ? [!!(e.meals && (e.meals.breakfast || e.meals.lunch || e.meals.dinner))] : [])];
@@ -1768,7 +1861,7 @@ export default function Page() {
 
   let bedNudge = null;
   if (page === me && isToday && !e.bed && g.bedtime) {
-    const now = new Date(); const nowMin = now.getHours() * 60 + now.getMinutes();
+    const nowMin = kstMinutes();
     const bm = g.bedtime.split(":").map(Number); const target = bm[0] * 60 + bm[1];
     let diff = target - nowMin; if (diff < -720) diff += 1440;
     if (diff >= 0 && diff <= 90) bedNudge = `곧 목표 취침 시간(${g.bedtime})이에요 🌙`;
@@ -1794,7 +1887,7 @@ export default function Page() {
 
   return (
     <div className={"td-wrap" + (night ? " night" : "")} style={wrapStyle}>
-      <style>{css}</style>
+      <style dangerouslySetInnerHTML={{ __html: css }} />
       <div className="td-glow" />
       <div className="td-app">
 
@@ -1813,7 +1906,7 @@ export default function Page() {
                 ? <button className="td-loginbtn" onClick={claimAnniv}>💝 200일 선물 받기 (+200p)</button>
                 : <div className="td-bdaydone">🪙 +200p 도착! 리워드에서 쓰고 싶은 거 골라 🎁</div>)
                 : <div className="td-bdaydone">💝 지인에게는 선물 버튼이 보여요</div>}
-              <small className="td-loginhint" onClick={closeAnniv} style={{ cursor: "pointer", textDecoration: "underline" }}>이따가 볼게</small>
+              <button type="button" className="td-loginhint td-linkbtn" onClick={closeAnniv}>이따가 볼게</button>
             </div>
           </div>
         )}
@@ -1834,21 +1927,23 @@ export default function Page() {
               {!bdayGiftDone
                 ? <button className="td-loginbtn" onClick={claimBdayGift}>🎁 생일 선물 받기</button>
                 : <div className="td-bdaydone">💋 +100 도착! 스타일샵에서 마음껏 써 🎀</div>}
-              <small className="td-loginhint" onClick={closeBday} style={{ cursor: "pointer", textDecoration: "underline" }}>이따가 볼게</small>
+              <button type="button" className="td-loginhint td-linkbtn" onClick={closeBday}>이따가 볼게</button>
             </div>
           </div>
         )}
-        {saveFailed && <div className="td-savefail" onClick={() => { setSaveFailed(false); const en = (days[date] || {})[me]; if (en) pushData(me, en); }}>⚠️ 저장이 안 됐어요 — 여기를 눌러 다시 시도</div>}
+        {!online && <div className="td-offline" role="status">📴 오프라인이에요 — 입력한 내용은 이 기기에 보관했다가 연결되면 자동으로 저장돼요</div>}
+        {online && loadError && <button className="td-savefail" onClick={() => reloadRef.current && reloadRef.current()}>⚠️ 기록을 불러오지 못했어요 — 눌러서 다시 시도</button>}
+        {online && saveFailed && <button className="td-savefail" onClick={() => { setSaveFailed(false); retryPending(); }}>⚠️ 저장이 안 됐어요 — 여기를 눌러 다시 시도 (입력은 기기에 보관 중)</button>}
         <div className="td-topbar">
-          <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}<small>{new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long" })} · 오늘</small></span>
+          <span className="td-hello">{greeting()}, {names[me]} {night ? "🌙" : "☀️"}<small>{new Date().toLocaleDateString("ko-KR", { month: "long", day: "numeric", weekday: "long", timeZone: "Asia/Seoul" })} · 오늘</small></span>
           <div className="td-topbtns">
-            <span className="td-milebadge" onClick={() => setView(view === "style" ? "style" : "reward")}>{view === "style" ? <>💋 <CountUp value={myKiss} /></> : <>🪙 <CountUp value={myBal} /></>}</span>
-            <button className="td-nightbtn" onClick={togglePush} aria-label="알림">{pushState === "on" ? "🔔" : "🔕"}</button>
+            <button type="button" className="td-milebadge" aria-label={view === "style" ? "내 뽀뽀 잔액" : "내 포인트 잔액, 리워드로 이동"} onClick={() => setView(view === "style" ? "style" : "reward")}>{view === "style" ? <>💋 <CountUp value={myKiss} /></> : <>🪙 <CountUp value={myBal} /></>}</button>
+            <button className="td-nightbtn" onClick={togglePush} aria-label={pushState === "on" ? "알림 끄기" : "알림 켜기"} aria-pressed={pushState === "on"}>{pushState === "on" ? "🔔" : "🔕"}</button>
             <button className="td-nightbtn" onClick={toggleNight} aria-label="테마 전환">{night ? "☀️" : "🌙"}</button>
             <button className="td-nightbtn" onClick={() => { if (window.confirm("로그아웃할까요?")) logoutAuth(); }} aria-label="로그아웃">🚪</button>
           </div>
         </div>
-        {pushMsg && <div className="td-pushmsg" onClick={() => setPushMsg("")}>{pushMsg}</div>}
+        {pushMsg && <button type="button" className="td-pushmsg" role="status" onClick={() => setPushMsg("")}>{pushMsg}</button>}
         <div className="td-quotecard">
           <span className="td-quoteicon">{myTone === "a" ? "🕊️" : "🤍"}</span>
           <p className="td-quotetext">{myQuote}</p>
@@ -1883,13 +1978,13 @@ export default function Page() {
                     <div className="td-guessbox">
                       <div className="td-guesslb">🎯 먼저 맞혀봐 — {names[me === "a" ? "b" : "a"]}은(는) 뭐라고 답할까? <small>(맞히면 💋+20)</small></div>
                       <div className="td-qanswer">
-                        <input className="td-input" placeholder="상대 답 예측 (건너뛰어도 돼)" value={guessInput} onChange={(ev) => setGuessInput(ev.target.value)} />
+                        <input className="td-input" maxLength={200} placeholder="상대 답 예측 (건너뛰어도 돼)" aria-label="상대 답 예측 (건너뛰어도 돼)" value={guessInput} onChange={(ev) => setGuessInput(ev.target.value)} />
                         <button className="td-qbtn" onClick={saveGuess}>예측</button>
                       </div>
                     </div>
                   ) : <div className="td-guessdone">🎯 내 예측: "{myGuess.guess}"</div>}
                   <div className="td-qanswer">
-                    <input className="td-input" placeholder="내 답을 적으면 상대 답이 열려요" value={qInput} onChange={(ev) => setQInput(ev.target.value)} />
+                    <input className="td-input" maxLength={1000} placeholder="내 답을 적으면 상대 답이 열려요" aria-label="내 답을 적으면 상대 답이 열려요" value={qInput} onChange={(ev) => setQInput(ev.target.value)} />
                     <button className="td-qbtn" onClick={saveAnswer}>답하기</button>
                   </div>
                 </>) : <div className="td-qwait">이날은 답하지 않았어요</div>
@@ -1923,9 +2018,9 @@ export default function Page() {
           )}
           {!mine && <div className="td-viewonly">👀 {names[page]}의 하루 · 응원볼만 보낼 수 있어요{lastSeen[page] && <span className="td-presence">🕐 {relTime(lastSeen[page])}에 기록했어요 💭</span>}</div>}
           <div className="td-datenav">
-            <button onClick={() => setDate(addDays(date, -1))} aria-label="이전">‹</button>
+            <button onClick={() => setDate(addDays(date, -1))} aria-label="이전 날">‹</button>
             <div className="td-date"><b>{md}</b><small>{dow}요일{isToday ? " · 오늘" : ""}</small>{!isToday && <button className="td-gototoday" onClick={() => setDate(today())}>오늘로 ↩</button>}</div>
-            <button onClick={() => setDate(addDays(date, 1))} disabled={isToday} aria-label="다음">›</button>
+            <button onClick={() => setDate(addDays(date, 1))} disabled={date >= today()} aria-label="다음 날">›</button>
           </div>
 
           <div className="td-hero td-card">
@@ -1988,40 +2083,40 @@ export default function Page() {
             {[
               ...(pgoalOf(page) ? [(() => { const pg = pgoalOf(page); const checks = bonusRulesOf(page).filter((r) => r.type === "daily_check"); return { k: "pg", label: `${pg.emoji} ${pg.label}`, filled: e.pg != null || checks.some((r) => e.bonus && e.bonus[r.id]), sum: e.pg == null ? "미기록" : (Number(e.pg) === 0 ? "0! 완벽해요 👏" : fmtPg(pg, Number(e.pg))),
                 body: (<div>
-                  <div className="td-mealrow"><span>오늘 {pg.label}</span><input className="td-input td-mealinput" type="number" min="0" inputMode="numeric" placeholder={`숫자 입력 (${pg.unit})`} value={e.pg == null ? "" : e.pg} disabled={!mine} onChange={(ev) => updateEntry(page, { pg: ev.target.value === "" ? null : Math.max(0, parseInt(ev.target.value) || 0) })} /></div>
+                  <div className="td-mealrow"><span>오늘 {pg.label}</span><input className="td-input td-mealinput" type="number" min="0" inputMode="numeric" placeholder={`숫자 입력 (${pg.unit})`} aria-label={`숫자 입력 (${pg.unit})`} value={e.pg == null ? "" : e.pg} disabled={!mine} onChange={(ev) => updateEntry(page, { pg: ev.target.value === "" ? null : Math.min(100000, Math.max(0, parseInt(ev.target.value, 10) || 0)) })} /></div>
                   {e.pg === 0 && <div className="td-zeropraise">🎉 오늘 {pg.label} 0! 참은 거 너무 잘했어 👏</div>}
                   {checks.map((r) => { const on = !!(e.bonus && e.bonus[r.id]); return <button key={r.id} className={"td-bonuschk" + (on ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { bonus: { ...(e.bonus || {}), [r.id]: !on } })}>{on ? "✅" : "⬜"} {r.emoji} 오늘 {r.label} 성공!</button>; })}
                 </div>) }; })()] : []),
               { k: "ex", label: "💪 운동", filled: !!e.exercise, sum: e.exercise ? ("완료" + (e.exNote ? " · " + e.exNote : "")) : "미기록",
                 body: (<>
                   <button className={"td-toggle" + (e.exercise ? " on" : "")} onClick={onExercise} disabled={!mine}>{e.exercise ? "✓ 오늘 운동 완료!" : "오늘 운동했어?"}</button>
-                  {e.exercise && <input className="td-input" placeholder="뭐 했어? (예: 런닝 30분)" value={e.exNote} disabled={!mine} onChange={(ev) => updateEntry(page, { exNote: ev.target.value })} />}
+                  {e.exercise && <input className="td-input" placeholder="뭐 했어? (예: 런닝 30분)" aria-label="뭐 했어? (예: 런닝 30분)" value={e.exNote} disabled={!mine} onChange={(ev) => updateEntry(page, { exNote: ev.target.value })} />}
                 </>) },
               ...(trackSnackFor(page) ? [{ k: "snack", label: "🍪 간식", filled: e.snack >= 0, sum: e.snack >= 0 ? (SNACKS[e.snack] + (e.snackNote ? " · " + e.snackNote : "")) : "미기록",
                 body: (<>
                   <div className="td-chips">{SNACKS.map((s, i) => (<button key={i} className={"td-chip" + (e.snack === i ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { snack: e.snack === i ? -1 : i })}>{s}</button>))}</div>
-                  {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자)" value={e.snackNote} disabled={!mine} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
+                  {e.snack > 0 && <input className="td-input" placeholder="뭐 먹었어? (예: 초콜릿, 과자)" aria-label="뭐 먹었어? (예: 초콜릿, 과자)" value={e.snackNote} disabled={!mine} onChange={(ev) => updateEntry(page, { snackNote: ev.target.value })} />}
                 </>) }] : []),
               { k: "mood", label: "🙂 오늘 기분", filled: (e.mood || 0) > 0, sum: (e.mood || 0) > 0 ? MOODS[e.mood - 1] : "미기록",
-                body: (<div className="td-chips">{MOODS.map((m2, i) => (<button key={i} className={"td-chip td-moodchip" + (e.mood === i + 1 ? " on" : "")} disabled={!mine} onClick={() => updateEntry(page, { mood: e.mood === i + 1 ? 0 : i + 1 })}>{m2}</button>))}</div>) },
+                body: (<div className="td-chips">{MOODS.map((m2, i) => (<button key={i} className={"td-chip td-moodchip" + (e.mood === i + 1 ? " on" : "")} aria-label={`기분 ${i + 1}점`} aria-pressed={e.mood === i + 1} disabled={!mine} onClick={() => updateEntry(page, { mood: e.mood === i + 1 ? 0 : i + 1 })}>{m2}</button>))}</div>) },
               ...(trackMealsFor(page) ? [{ k: "meals", label: "🍽️ 오늘의 식단", cls: " td-meals", filled: !!(e.meals.breakfast || e.meals.lunch || e.meals.dinner), sum: [e.meals.breakfast, e.meals.lunch, e.meals.dinner].filter(Boolean).join(" / ") || "미기록",
                 body: (<>
-                  <div className="td-mealrow"><span>🌅 아침</span><input className="td-input td-mealinput" placeholder="아침에 뭐 먹었어?" value={e.meals.breakfast} disabled={!mine} onChange={(ev) => updateMeal(page, "breakfast", ev.target.value)} /></div>
-                  <div className="td-mealrow"><span>🌞 점심</span><input className="td-input td-mealinput" placeholder="점심에 뭐 먹었어?" value={e.meals.lunch} disabled={!mine} onChange={(ev) => updateMeal(page, "lunch", ev.target.value)} /></div>
-                  <div className="td-mealrow"><span>🌙 저녁</span><input className="td-input td-mealinput" placeholder="저녁에 뭐 먹었어?" value={e.meals.dinner} disabled={!mine} onChange={(ev) => updateMeal(page, "dinner", ev.target.value)} /></div>
+                  <div className="td-mealrow"><span>🌅 아침</span><input className="td-input td-mealinput" placeholder="아침에 뭐 먹었어?" aria-label="아침에 뭐 먹었어?" value={e.meals.breakfast} disabled={!mine} onChange={(ev) => updateMeal(page, "breakfast", ev.target.value)} /></div>
+                  <div className="td-mealrow"><span>🌞 점심</span><input className="td-input td-mealinput" placeholder="점심에 뭐 먹었어?" aria-label="점심에 뭐 먹었어?" value={e.meals.lunch} disabled={!mine} onChange={(ev) => updateMeal(page, "lunch", ev.target.value)} /></div>
+                  <div className="td-mealrow"><span>🌙 저녁</span><input className="td-input td-mealinput" placeholder="저녁에 뭐 먹었어?" aria-label="저녁에 뭐 먹었어?" value={e.meals.dinner} disabled={!mine} onChange={(ev) => updateMeal(page, "dinner", ev.target.value)} /></div>
                 </>) }] : []),
               { k: "grat", label: "⭐ 오늘의 3감사", cls: " td-gratblock", labelCls: " td-gratlabel", filled: (e.gratitude || []).some((x) => (x || "").trim()), sum: (e.gratitude || []).filter((x) => (x || "").trim()).length ? (e.gratitude || []).filter((x) => (x || "").trim()).length + "개 작성" : "미기록",
-                body: (<>{[0, 1, 2].map((i) => (<textarea key={i} className="td-input td-gratinput td-autogrow" rows={1} placeholder={`${i + 1}. 감사한 일`} value={e.gratitude[i]} disabled={!mine} ref={autoGrowRef} onInput={autoGrow} onChange={(ev) => { const gg = [...e.gratitude]; gg[i] = ev.target.value; updateEntry(page, { gratitude: gg }); }} />))}</>) },
+                body: (<>{[0, 1, 2].map((i) => (<textarea key={i} className="td-input td-gratinput td-autogrow" rows={1} placeholder={`${i + 1}. 감사한 일`} aria-label={`${i + 1}. 감사한 일`} value={e.gratitude[i]} disabled={!mine} ref={autoGrowRef} onInput={autoGrow} onChange={(ev) => { const gg = [...e.gratitude]; gg[i] = ev.target.value; updateEntry(page, { gratitude: gg }); }} />))}</>) },
               { k: "refl", label: "📓 한 줄 후기", filled: !!(e.reflection || "").trim(), sum: (e.reflection || "").trim() ? ((e.reflection || "").length > 22 ? (e.reflection || "").slice(0, 22) + "…" : e.reflection) : "미기록",
-                body: (<textarea className="td-area td-autogrow" rows={2} placeholder="오늘 하루는 어땠어?" value={e.reflection} disabled={!mine} ref={autoGrowRef} onInput={autoGrow} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />) },
+                body: (<textarea className="td-area td-autogrow" rows={2} placeholder="오늘 하루는 어땠어?" aria-label="오늘 하루는 어땠어?" value={e.reflection} disabled={!mine} ref={autoGrowRef} onInput={autoGrow} onChange={(ev) => updateEntry(page, { reflection: ev.target.value })} />) },
             ].map((b) => {
               const open = openSet[b.k] != null ? openSet[b.k] : (mine ? !initFilled[b.k] : false);
               return (
                 <div key={b.k} className={"td-block" + (b.cls || "")}>
-                  <button className="td-bhead" onClick={() => setOpenSet((o) => ({ ...o, [b.k]: !open }))}>
+                  <button className="td-bhead" aria-expanded={open} onClick={() => setOpenSet((o) => ({ ...o, [b.k]: !open }))}>
                     <span className={"td-blabel2" + (b.labelCls || "")}>{b.label}</span>
                     {!open && <span className={"td-bsum" + (b.filled ? " ok" : "")}>{b.filled ? "✓ " : ""}{b.sum}</span>}
-                    <i className="td-bcaret">{open ? "▴" : "▾"}</i>
+                    <i className="td-bcaret" aria-hidden="true">{open ? "▴" : "▾"}</i>
                   </button>
                   {open && <div className="td-bbody">{b.body}</div>}
                 </div>
@@ -2042,7 +2137,7 @@ export default function Page() {
               <div className="td-cheerbox">
                 <div className="td-cheerpresets">{(CHEER_PRESETS_BY_SLOT[me] || CHEER_PRESETS).map((p, i) => <button key={i} onClick={() => sendCheerMsg(page, p)}>{p}</button>)}</div>
                 <div className="td-cheercustom">
-                  <input className="td-input" placeholder="직접 한마디 적기…" value={cheerText} onChange={(ev) => setCheerText(ev.target.value)} />
+                  <input className="td-input" maxLength={300} placeholder="직접 한마디 적기…" aria-label="직접 한마디 적기…" value={cheerText} onChange={(ev) => setCheerText(ev.target.value)} />
                   <button className="td-qbtn" onClick={() => sendCheerMsg(page, cheerText)}>보내기</button>
                 </div>
                 <button className="td-cheeronly" onClick={() => sendCheerMsg(page, "")}>메시지 없이 응원볼만 던지기</button>
@@ -2059,7 +2154,7 @@ export default function Page() {
           <button className="td-goalbtn td-card" onClick={() => setShowGoals((v) => !v)}>🎯 {names[page]} {mine ? "목표 설정" : "목표 보기"} {showGoals ? "▲" : "▼"}</button>
           {showGoals && (
             <div className="td-goalpanel td-card">
-              <div className="td-goalrow"><label>이름</label><input type="text" value={g.name || ""} placeholder={THEME[page].name} disabled={!mine} onChange={(ev) => saveGoal(page, { name: ev.target.value })} style={{ width: 140 }} /></div>
+              <div className="td-goalrow"><label>이름</label><input aria-label="이름" type="text" maxLength={12} value={g.name || ""} placeholder={THEME[page].name} disabled={!mine} onChange={(ev) => saveGoal(page, { name: ev.target.value })} style={{ width: 140 }} /></div>
               <div className="td-goalrow td-goalcol"><label>캐릭터</label>
                 <div className="td-charpick">
                   {Object.entries(CHARACTERS).map(([cid, c]) => (
@@ -2072,7 +2167,7 @@ export default function Page() {
               <div className="td-goalrow td-goalcol"><label>테마 색</label>
                 <div className="td-palpick">
                   {Object.entries(PALETTES).map(([pid, p]) => (
-                    <button key={pid} className={"td-palbtn" + (((g.palette) || (page === "a" ? "coral" : "fairy")) === pid ? " on" : "")} disabled={!mine} style={{ background: `linear-gradient(135deg,${p.c1},${p.c2})` }} onClick={() => saveGoal(page, { palette: pid })} />
+                    <button key={pid} className={"td-palbtn" + (((g.palette) || (page === "a" ? "coral" : "fairy")) === pid ? " on" : "")} aria-label={`테마 색 ${pid}`} disabled={!mine} style={{ background: `linear-gradient(135deg,${p.c1},${p.c2})` }} onClick={() => saveGoal(page, { palette: pid })} />
                   ))}
                 </div>
               </div>
@@ -2085,21 +2180,21 @@ export default function Page() {
                   ))}
                 </div>
               </div>
-              <div className="td-goalrow td-goalcol"><label>취침 알림 문구</label><input type="text" value={g.bedMsg || ""} placeholder="이제 잘 시간이야. 푹 자 🌙" disabled={!mine} onChange={(ev) => saveGoal(page, { bedMsg: ev.target.value })} /></div>
-              <div className="td-goalrow"><label>목표 취침</label><input type="time" value={g.bedtime} disabled={!mine} onChange={(ev) => saveGoal(page, { bedtime: ev.target.value })} /></div>
-              <div className="td-goalrow"><label>목표 기상</label><input type="time" value={g.wake} disabled={!mine} onChange={(ev) => saveGoal(page, { wake: ev.target.value })} /></div>
-              <div className="td-goalrow"><label>목표 수면(시간)</label><input type="number" step="0.5" min="4" max="12" value={g.sleepHours} disabled={!mine} onChange={(ev) => saveGoal(page, { sleepHours: parseFloat(ev.target.value) || 7.5 })} /></div>
-              <div className="td-goalrow"><label>주간 운동(회)</label><input type="number" min="1" max="7" value={g.exerciseWeekly} disabled={!mine} onChange={(ev) => saveGoal(page, { exerciseWeekly: parseInt(ev.target.value) || 4 })} /></div>
+              <div className="td-goalrow td-goalcol"><label>취침 알림 문구</label><input aria-label="취침 알림 문구" type="text" value={g.bedMsg || ""} maxLength={80} placeholder="이제 잘 시간이야. 푹 자 🌙" disabled={!mine} onChange={(ev) => saveGoal(page, { bedMsg: ev.target.value })} /></div>
+              <div className="td-goalrow"><label>목표 취침</label><input aria-label="목표 취침" type="time" value={g.bedtime} disabled={!mine} onChange={(ev) => saveGoal(page, { bedtime: ev.target.value })} /></div>
+              <div className="td-goalrow"><label>목표 기상</label><input aria-label="목표 기상" type="time" value={g.wake} disabled={!mine} onChange={(ev) => saveGoal(page, { wake: ev.target.value })} /></div>
+              <div className="td-goalrow"><label>목표 수면(시간)</label><input aria-label="목표 수면(시간)" type="number" step="0.5" min="4" max="12" value={g.sleepHours} disabled={!mine} onChange={(ev) => { const v = parseFloat(ev.target.value); saveGoal(page, { sleepHours: Number.isFinite(v) ? Math.min(12, Math.max(4, v)) : 7.5 }); }} /></div>
+              <div className="td-goalrow"><label>주간 운동(회)</label><input aria-label="주간 운동(회)" type="number" min="1" max="7" value={g.exerciseWeekly} disabled={!mine} onChange={(ev) => { const v = parseInt(ev.target.value, 10); saveGoal(page, { exerciseWeekly: Number.isFinite(v) ? Math.min(7, Math.max(1, v)) : 4 }); }} /></div>
               <div className="td-goalrow td-goaldays"><label>운동 요일</label><div className="td-daychips">{DOW_MON.map((d, i) => { const on = (g.exerciseDays || []).includes(i); return <button key={i} className={"td-daychip" + (on ? " on" : "")} disabled={!mine} onClick={() => { const arr = new Set(g.exerciseDays || []); on ? arr.delete(i) : arr.add(i); saveGoal(page, { exerciseDays: [...arr] }); }}>{d}</button>; })}</div></div>
               <div className="td-goalsec">🎯 개인 목표 (주간 한도)</div>
               {!g.pgoal ? (
                 <button className="td-goalbtn" disabled={!mine} onClick={() => saveGoal(page, { pgoal: { emoji: "🎯", label: "나의 목표", unit: "분", weeklyLimit: 420, countLimit: 0 } })}>+ 개인 목표 만들기</button>
               ) : (<>
-                <div className="td-goalrow"><label>이름</label><input type="text" value={g.pgoal.label} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, label: ev.target.value } })} /></div>
-                <div className="td-goalrow"><label>이모지</label><input type="text" maxLength="2" value={g.pgoal.emoji} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, emoji: ev.target.value } })} /></div>
-                <div className="td-goalrow"><label>단위</label><input type="text" maxLength="6" value={g.pgoal.unit} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, unit: ev.target.value } })} /></div>
-                <div className="td-goalrow"><label>주간 한도 ({g.pgoal.unit})</label><input type="number" min="1" value={g.pgoal.weeklyLimit} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, weeklyLimit: parseInt(ev.target.value) || 1 } })} /></div>
-                <div className="td-goalrow"><label>주간 횟수 한도 (0=없음)</label><input type="number" min="0" max="7" value={g.pgoal.countLimit || 0} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, countLimit: parseInt(ev.target.value) || 0 } })} /></div>
+                <div className="td-goalrow"><label>이름</label><input aria-label="이름" type="text" value={g.pgoal.label} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, label: ev.target.value } })} /></div>
+                <div className="td-goalrow"><label>이모지</label><input aria-label="이모지" type="text" maxLength="2" value={g.pgoal.emoji} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, emoji: ev.target.value } })} /></div>
+                <div className="td-goalrow"><label>단위</label><input aria-label="단위" type="text" maxLength="6" value={g.pgoal.unit} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, unit: ev.target.value } })} /></div>
+                <div className="td-goalrow"><label>주간 한도 ({g.pgoal.unit})</label><input aria-label="주간 한도" type="number" min="1" value={g.pgoal.weeklyLimit} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, weeklyLimit: Math.max(1, parseInt(ev.target.value, 10) || 1) } })} /></div>
+                <div className="td-goalrow"><label>주간 횟수 한도 (0=없음)</label><input aria-label="주간 횟수 한도 (0=없음)" type="number" min="0" max="7" value={g.pgoal.countLimit || 0} disabled={!mine} onChange={(ev) => saveGoal(page, { pgoal: { ...g.pgoal, countLimit: Math.min(7, Math.max(0, parseInt(ev.target.value, 10) || 0)) } })} /></div>
                 {mine && <button className="td-goalbtn" style={{ color: "#DC6B57" }} onClick={() => { if (window.confirm("개인 목표를 삭제할까요?")) saveGoal(page, { pgoal: null }); }}>목표 삭제</button>}
               </>)}
             </div>
@@ -2217,7 +2312,7 @@ export default function Page() {
             <div className="td-bars">
               {thisWeek.map((dk) => {
                 const dd = days[dk] || {}; const ma = sleepMinutes(dd.a?.bed, dd.a?.wake); const mb = sleepMinutes(dd.b?.bed, dd.b?.wake); const lab = labelDate(dk);
-                return (<button key={dk} className={"td-daycol" + (dk === date ? " sel" : "")} onClick={() => { setDate(dk); setView("today"); }}>
+                return (<button key={dk} className={"td-daycol" + (dk === date ? " sel" : "")} disabled={dk > today()} aria-label={`${lab.short} 수면 ${fmtSleep(ma)} / ${fmtSleep(mb)}`} onClick={() => { setDate(dk); setView("today"); }}>
                   <div className="td-barpair"><span className="td-bar" style={{ height: (ma ? Math.min(100, ma / 540 * 100) : 0) + "%", background: T.a.c1 }} /><span className="td-bar" style={{ height: (mb ? Math.min(100, mb / 540 * 100) : 0) + "%", background: T.b.c1 }} /></div>
                   <span className="td-daylab">{lab.short}</span>
                 </button>);
@@ -2230,9 +2325,9 @@ export default function Page() {
         {view === "calendar" && (
           <div className="td-month td-card">
             <div className="td-monthhead">
-              <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m - 2, 1))); }}>‹</button>
+              <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m - 2, 1))); }} aria-label="이전 달">‹</button>
               <h3>🗓️ {my_}년 {mm_}월 · {names[page]}</h3>
-              <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m, 1))); }}>›</button>
+              <button onClick={() => { const [y, m] = monthRef.split("-").map(Number); setMonthRef(ymd(new Date(y, m, 1))); }} aria-label="다음 달">›</button>
             </div>
             <div className="td-monthdow">{DOW_MON.map((d) => <span key={d}>{d}</span>)}</div>
             <div className="td-monthgrid">
@@ -2241,7 +2336,8 @@ export default function Page() {
                 const en = days[dk]?.[page]; const mm = en ? sleepMinutes(en.bed, en.wake) : null;
                 const slept = mm != null; const goalMet = mm != null && mm >= (g.sleepHours - 0.5) * 60; const pgRec = en?.pg != null && en?.pg !== "";
                 const dnum = parseInt(dk.split("-")[2], 10);
-                return (<button key={dk} className={"td-mcell" + (dk === date ? " sel" : "")} onClick={() => { setDate(dk); setView("today"); }} style={{ background: goalMet ? "var(--soft)" : (slept ? "var(--soft2)" : "transparent") }}>
+                const future = dk > today();
+                return (<button key={dk} className={"td-mcell" + (dk === date ? " sel" : "") + (future ? " future" : "")} disabled={future} aria-label={`${dk}${goalMet ? " 수면목표 달성" : slept ? " 수면 기록" : ""}`} onClick={() => { setDate(dk); setView("today"); }} style={{ background: goalMet ? "var(--soft)" : (slept ? "var(--soft2)" : "transparent") }}>
                   <span className="td-mnum">{dnum}</span>{pgRec && <span className="td-mdot" style={{ background: t.c1 }} />}
                 </button>);
               })}
@@ -2274,21 +2370,21 @@ export default function Page() {
             {affordableCnt > 0 && nextGoal && <p className="td-milesub">지금 바로 교환 가능한 리워드 {affordableCnt}개 🎉</p>}
           </div>
 
-          {redeemMsg && <div className="td-pushmsg" onClick={() => setRedeemMsg("")}>{redeemMsg}</div>}
+          {redeemMsg && <button type="button" className="td-pushmsg" role="status" onClick={() => setRedeemMsg("")}>{redeemMsg}</button>}
 
           <div className="td-card td-lovecard">
             <h3 className="td-rewardh3">💝 마음 보내기</h3>
             <div className="td-lovegrid">
               <div className="td-lovebox">
                 <span className="td-loveemoji">🎁</span><b>포인트 선물</b>
-                <div className="td-loverow"><input className="td-input" type="number" placeholder="포인트" value={giftInput} onChange={(ev) => setGiftInput(ev.target.value)} /><button className="td-qbtn" onClick={sendGift}>보내기</button></div>
+                <div className="td-loverow"><input className="td-input" type="number" placeholder="포인트" aria-label="포인트" value={giftInput} onChange={(ev) => setGiftInput(ev.target.value)} /><button className="td-qbtn" onClick={sendGift}>보내기</button></div>
                 <small>{names[me === "a" ? "b" : "a"]}에게 내 포인트를 나눠줘요</small>
               </div>
             </div>
             <div className="td-lovebox td-letterwrite">
               <span className="td-loveemoji">💌</span><b>몰래 쪽지 숨기기</b>
-              <textarea className="td-area td-autogrow" rows={2} placeholder={`${names[me === "a" ? "b" : "a"]}에게 남길 따뜻한 한마디…`} value={letterInput.msg} onChange={(ev) => setLetterInput((s) => ({ ...s, msg: ev.target.value }))} />
-              <div className="td-loverow"><label className="td-letterlabel">배달 날짜</label><input className="td-input" type="date" value={letterInput.date} min={today()} onChange={(ev) => setLetterInput((s) => ({ ...s, date: ev.target.value }))} /><button className="td-qbtn" onClick={sendLetter}>숨기기</button></div>
+              <textarea className="td-area td-autogrow" rows={2} maxLength={1000} placeholder={`${names[me === "a" ? "b" : "a"]}에게 남길 따뜻한 한마디…`} aria-label={`${names[me === "a" ? "b" : "a"]}에게 남길 따뜻한 한마디…`} value={letterInput.msg} onChange={(ev) => setLetterInput((s) => ({ ...s, msg: ev.target.value }))} />
+              <div className="td-loverow"><label className="td-letterlabel">배달 날짜</label><input className="td-input" type="date" aria-label="배달 날짜" value={letterInput.date} min={today()} onChange={(ev) => setLetterInput((s) => ({ ...s, date: ev.target.value }))} /><button className="td-qbtn" onClick={sendLetter}>숨기기</button></div>
               <small>그날 아침, 상대에게 깜짝 쪽지가 도착해요</small>
             </div>
           </div>
@@ -2324,7 +2420,7 @@ export default function Page() {
                 const tier = c.cost < 100 ? " t1" : c.cost < 300 ? " t2" : " t3";
                 return (
                   <div key={c.id} className={"td-rcard" + tier + (can ? "" : " locked")}>
-                    {shopEdit && <button className="td-rdel" onClick={() => deleteReward(c.id)}>✕</button>}
+                    {shopEdit && <button className="td-rdel" onClick={() => { if (window.confirm(`'${c.title}' 리워드를 삭제할까요?`)) deleteReward(c.id); }} aria-label={`${c.title} 삭제`}>✕</button>}
                     <span className="td-remoji">{c.emoji}</span>
                     <b className="td-rtitle">{c.title}</b>
                     <span className="td-rprice">🪙 {c.cost}p</span>
@@ -2338,12 +2434,12 @@ export default function Page() {
               <div className="td-addpanel">
                 <div className="td-emojirow">
                   {["🎁", "☕", "🍰", "🎬", "💆", "🍳", "🧹", "🌟", "✈️", "🛍️", "🎮", "💐"].map((em) => (
-                    <button key={em} className={"td-emojichip" + (newReward.emoji === em ? " on" : "")} onClick={() => setNewReward((s) => ({ ...s, emoji: em }))}>{em}</button>
+                    <button key={em} aria-label={`이모지 ${em}`} className={"td-emojichip" + (newReward.emoji === em ? " on" : "")} onClick={() => setNewReward((s) => ({ ...s, emoji: em }))}>{em}</button>
                   ))}
                 </div>
                 <div className="td-addrow">
-                  <input className="td-input td-addtitle" placeholder="리워드 이름" value={newReward.title} onChange={(ev) => setNewReward((s) => ({ ...s, title: ev.target.value }))} />
-                  <input className="td-input td-addcost" type="number" placeholder="가격(p)" value={newReward.cost} onChange={(ev) => setNewReward((s) => ({ ...s, cost: ev.target.value }))} />
+                  <input className="td-input td-addtitle" maxLength={40} placeholder="리워드 이름" aria-label="리워드 이름" value={newReward.title} onChange={(ev) => setNewReward((s) => ({ ...s, title: ev.target.value }))} />
+                  <input className="td-input td-addcost" type="number" placeholder="가격(p)" aria-label="가격(p)" value={newReward.cost} onChange={(ev) => setNewReward((s) => ({ ...s, cost: ev.target.value }))} />
                 </div>
                 <button className="td-addbtn2" onClick={addReward}>추가하기</button>
               </div>
@@ -2398,7 +2494,7 @@ export default function Page() {
           </div>
 
           {styleMine && (<>
-          {redeemMsg && <div className="td-pushmsg" onClick={() => setRedeemMsg("")}>{redeemMsg}</div>}
+          {redeemMsg && <button type="button" className="td-pushmsg" role="status" onClick={() => setRedeemMsg("")}>{redeemMsg}</button>}
 
           {giftInbox.length > 0 && (
             <button className="td-letterbanner td-card" onClick={() => setUnbox(giftInbox[0])}>
@@ -2417,9 +2513,9 @@ export default function Page() {
                   <div key={cat} className="td-closetrow">
                     <span className="td-decolabel">{label}</span>
                     <div className="td-decochips">
-                      <button className={"td-decochip" + (!eqId ? " on" : "")} onClick={() => saveAvatar({ [cat]: "" })}>🚫</button>
+                      <button className={"td-decochip" + (!eqId ? " on" : "")} onClick={() => saveAvatar({ [cat]: "" })} aria-label={`${label} 벗기`}>🚫</button>
                       {mine2.length === 0 && <span className="td-closetempty">상점·뽑기에서 데려와봐요 →</span>}
-                      {mine2.map((it) => <button key={it.id} className={"td-decochip tier" + it.tier + (eqId === it.id ? " on" : "")} onClick={() => saveAvatar({ [cat]: it.id })}>{it.icon}</button>)}
+                      {mine2.map((it) => <button key={it.id} className={"td-decochip tier" + it.tier + (eqId === it.id ? " on" : "")} onClick={() => saveAvatar({ [cat]: it.id })} aria-label={it.name} aria-pressed={eqId === it.id}>{it.icon}</button>)}
                     </div>
                   </div>
                 );
@@ -2441,13 +2537,13 @@ export default function Page() {
                 return (
                   <div key={it.id} className={"td-shopitem tier" + it.tier + (trying ? " trying" : "")}>
                     <span className="td-tierbadge">{TIER_NAMES[it.tier]}</span>
-                    <button className="td-itempreview" onClick={() => setTryOn((s) => { const n = { ...s }; if (trying) delete n[it.cat]; else n[it.cat] = it.id; return n; })}><ItemThumb it={it} /></button>
+                    <button className="td-itempreview" aria-label={`${it.name} 입어보기`} aria-pressed={trying} onClick={() => setTryOn((s) => { const n = { ...s }; if (trying) delete n[it.cat]; else n[it.cat] = it.id; return n; })}><ItemThumb it={it} /></button>
                     <b className="td-itemname">{it.name}</b>
                     <span className="td-itemprice">💋 {it.price}</span>
                     {own ? <span className="td-ownedtag">✓ 보유 중</span> : (
                       <div className="td-itembtns">
                         <button className="td-buybtn" disabled={!can} onClick={() => buyItem(it)}>{can ? "구매" : `🔒 ${it.price - myKiss}`}</button>
-                        <button className="td-giftitembtn" disabled={!can || partnerOwn} onClick={() => setGiftItem(it)}>💝</button>
+                        <button className="td-giftitembtn" disabled={!can || partnerOwn} onClick={() => setGiftItem(it)} aria-label={`${it.name} 선물하기`}>💝</button>
                       </div>
                     )}
                   </div>
@@ -2503,7 +2599,7 @@ export default function Page() {
             <div className="td-envtop">💝</div>
             <div className="td-envfrom">{names[me === "a" ? "b" : "a"]}에게 선물하기</div>
             <p className="td-envmsg">{giftItem.icon} {giftItem.name} · 💋 {giftItem.price}</p>
-            <input className="td-input" placeholder="짧은 메시지 (선택)" value={giftNote} onChange={(ev) => setGiftNote(ev.target.value)} />
+            <input className="td-input" maxLength={200} placeholder="짧은 메시지 (선택)" aria-label="짧은 메시지 (선택)" value={giftNote} onChange={(ev) => setGiftNote(ev.target.value)} />
             <div style={{ marginTop: 14 }}><button className="td-envclose" onClick={sendItemGift}>선물 보내기 💝</button></div>
           </div>
         </div>
@@ -2530,23 +2626,30 @@ export default function Page() {
       )}
       {celebrate && <div className="td-confetti" key={celebrate.key}>{[...Array(24)].map((_, i) => <b key={i} style={{ "--l": (i * 4.1) % 100 + "%", "--dl": (i % 6) * 0.1 + "s", "--rot": (i * 37) + "deg", background: i % 2 ? "var(--c1)" : "var(--c2)" }} />)}<div className="td-celebmsg">{celebrate.msg}</div></div>}
 
-      <nav className="td-bottomnav td-glasscard">
+      <nav className="td-bottomnav td-glasscard" aria-label="주요 메뉴">
         {[["today", "📝", "오늘"], ["review", "📊", "리뷰"], ["calendar", "🗓️", "캘린더"], ["reward", "🎁", "리워드"], ["style", "🎀", "스타일"]].map(([v, ic, lb]) => (
-          <button key={v} className={"td-navbtn" + (view === v ? " on" : "")} onClick={() => setView(v)}><span>{ic}</span>{lb}</button>
+          <button key={v} className={"td-navbtn" + (view === v ? " on" : "")} aria-current={view === v ? "page" : undefined} onClick={() => setView(v)}><span aria-hidden="true">{ic}</span>{lb}</button>
         ))}
       </nav>
     </div>
   );
 }
 
+// 정적 상수 CSS 라 dangerouslySetInnerHTML 로 넣어도 안전하다. ({css} 로 넣으면 SSR 때 > · ' 가 &gt; 등으로 이스케이프돼 하이드레이션 오류(#425)가 나고 일부 선택자가 깨졌다.)
 const css = `
-@import url('https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap');
-.td-wrap{ --ink:#4A3F39; --muted:#B5A99E;
+.td-wrap{ --ink:#4A3F39; --muted:#776C62;
   --sp1:4px; --sp2:8px; --sp3:12px; --sp4:16px; --sp5:24px; --sp6:32px;
   --r-sm:12px; --r-md:20px; --r-pill:999px;
   --sh-soft:0 4px 16px var(--shadow); --sh-float:0 10px 30px var(--shadow);
   position:relative; font-family:'Gowun Dodum',system-ui,sans-serif; background:var(--pageBg,#FFF6EF); color:var(--ink); min-height:100vh; padding:14px 14px 96px; transition:background .4s,color .4s; -webkit-text-size-adjust:100%; -webkit-font-smoothing:antialiased; overflow-x:hidden; }
 .td-wrap *{ box-sizing:border-box; }
+.td-wrap :focus-visible{ outline:3px solid var(--c2); outline-offset:2px; }
+.td-wrap input, .td-wrap textarea, .td-wrap select{ font-size:16px !important; } /* iOS 포커스 시 자동 확대 방지 (확대 자체는 허용) */
+.td-linkbtn{ border:none; background:none; padding:4px; margin-left:auto; margin-right:auto; cursor:pointer; text-decoration:underline; font-family:'Gowun Dodum',system-ui,sans-serif; }
+button.td-pushmsg{ display:block; width:100%; font-family:'Gowun Dodum',system-ui,sans-serif; cursor:pointer; }
+button.td-milebadge{ border:none; cursor:pointer; }
+.td-mcell.future, .td-daycol:disabled{ opacity:.35; cursor:default; }
+@media (prefers-reduced-motion: reduce){ .td-wrap *, .td-wrap *::before, .td-wrap *::after{ animation-duration:.01ms !important; animation-iteration-count:1 !important; transition-duration:.01ms !important; } }
 .td-glow{ position:fixed; top:-15%; left:50%; transform:translateX(-50%); width:120%; height:44%; background:radial-gradient(ellipse at center, var(--glowc) 0%, transparent 70%); opacity:.7; pointer-events:none; z-index:0; transition:background .4s; }
 .td-loading{ text-align:center; padding:80px 0; color:var(--muted); font-family:'Jua'; }
 .td-app{ position:relative; z-index:1; width:100%; max-width:460px; margin:0 auto; }
@@ -2556,7 +2659,8 @@ const css = `
 .td-topbar{ display:flex; align-items:flex-start; justify-content:space-between; gap:var(--sp3); padding:2px 4px var(--sp4); }
 .td-topbtns{ display:flex; gap:var(--sp2); align-items:center; flex-shrink:0; }
 .td-pushmsg{ background:var(--card); border:1px solid var(--line); color:var(--ink); font-size:13px; text-align:center; padding:9px 12px; border-radius:var(--r-sm); margin-bottom:10px; cursor:pointer; box-shadow:var(--sh-soft); }
-.td-savefail{ background:#FFF3F0; border:1.5px solid #F5C9BC; color:#C0553A; font-size:13px; text-align:center; padding:10px 12px; border-radius:var(--r-sm); margin-bottom:10px; cursor:pointer; font-family:'Gowun Dodum'; }
+.td-offline{ background:#FFF8E6; border:1.5px solid #F1D79A; color:#7A5A12; font-size:13px; text-align:center; padding:10px 12px; border-radius:var(--r-sm); margin-bottom:10px; }
+.td-savefail{ display:block; width:100%; background:#FFF3F0; border:1.5px solid #F5C9BC; color:#C0553A; font-size:13px; text-align:center; padding:10px 12px; border-radius:var(--r-sm); margin-bottom:10px; cursor:pointer; font-family:'Gowun Dodum'; }
 .td-onboard{ padding:var(--sp4); margin-bottom:var(--sp3); border:1.5px dashed var(--c1); }
 .td-onboardhead{ font-family:'Jua'; font-size:15px; color:var(--c1); margin-bottom:var(--sp3); }
 .td-onboardstep{ display:flex; gap:10px; align-items:flex-start; margin-bottom:var(--sp2); font-size:13px; line-height:1.5; color:var(--ink); }
@@ -2676,7 +2780,7 @@ const css = `
 .td-toggle.on{ background:var(--c1); border-style:solid; border-color:var(--c1); color:#fff; animation:pop .35s ease; }
 .td-input{ width:100%; margin-top:9px; padding:13px 15px; border:1.5px solid var(--line); border-radius:var(--r-sm); font-family:'Gowun Dodum'; font-size:15px; background:var(--field); color:var(--ink); outline:none; transition:border-color .2s; }
 .td-input:focus{ border-color:var(--c1); }
-.td-input::placeholder,.td-area::placeholder{ color:var(--muted); opacity:.7; }
+.td-input::placeholder,.td-area::placeholder{ color:var(--muted); opacity:1; }
 .td-chips{ display:flex; gap:6px; }
 .td-chip{ flex:1; min-width:0; padding:10px 0; border:2px solid var(--soft); border-radius:11px; background:var(--field); font-family:'Jua'; font-size:13px; color:var(--ink); cursor:pointer; }
 .td-chip.on{ background:var(--c1); border-color:var(--c1); color:#fff; animation:pop .3s ease; }
